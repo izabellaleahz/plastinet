@@ -1,7 +1,7 @@
 name: plastiNet
 channels:
-  - bioconda
   - conda-forge
+  - bioconda
 dependencies:
   - numpy
   - pandas
@@ -14,8 +14,11 @@ dependencies:
   # - torchaudio
   - matplotlib
   - anndata
-  - scanpy
   - squidpy
   - gudhi
+  - scanpy=1.9.8
   - cmcrameri
+  - pip:
+      - torch-geometric
+
 prefix: /home/jupyter/mambaforge/envs/plastiNet
