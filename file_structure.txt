@@ -1,0 +1,27 @@
+plastinet/
+│
+├── __init__.py                  # Initializes the package
+├── data/                        # Data-related utilities
+│   ├── __init__.py
+│   ├── data_loader.py           # Functions for loading and preprocessing data
+│   └── graph_utils.py           # Graph-related functions (e.g., graph construction)
+│
+├── models/                      # Neural network models and training logic
+│   ├── __init__.py
+│   ├── attention.py             # Contains attention-related modules (GAT, Self-Neighbor Attention)
+│   └── plastinet_model.py       # Main PlastiNet model definition
+│
+├── analysis/                    # Analysis utilities (e.g., attention, pseudotime, etc.)
+│   ├── __init__.py
+│   ├── attention_analysis.py    # Functions for analyzing attention weights (AvgAtt, GAtt, etc.)
+│   └── pseudotime.py            # Pseudotime construction and analysis
+│
+├── visualization/               # Visualization tools
+│   ├── __init__.py
+│   ├── plots.py                 # Visualization tools for embeddings, attention, etc.
+│   └── pseudotime_plots.py      # Specialized plotting tools for pseudotime analysis
+│
+└── notebooks/                   # Example Jupyter notebooks for use
+    ├── plastinet_training.ipynb # Notebook for training PlastiNet
+    ├── attention_analysis.ipynb # Notebook for attention analysis
+    └── pseudotime_analysis.ipynb # Notebook for pseudotime analysis
