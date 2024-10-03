@@ -10,8 +10,8 @@ dependencies:
   - scikit-learn
   - torchvision
   - ipykernel
-  - cpuonly
-  - torchaudio
+  # - cpuonly
+  # - torchaudio
   - matplotlib
   - anndata
   - scanpy
