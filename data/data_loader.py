@@ -2,7 +2,9 @@
 import torch
 from torch_geometric.data import Data
 
-def create_data_objects(adata, sample_key, radius, graph_alpha, sparse_mx_to_torch_edge_list, graph_to_sparse_matrix):
+from .graph_utils import graph_alpha, graph_to_sparse_matrix, sparse_mx_to_torch_edge_list
+
+def create_data_objects(adata, sample_key, radius):
     data_list = []
     for s in set(adata.obs[sample_key]):
         sample = adata[adata.obs[sample_key] == s]
