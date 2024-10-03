@@ -4,9 +4,10 @@ from torch_geometric.nn import DeepGraphInfomax
 import random
 import numpy as np
 import torch
+import anndata
 
 from .attention import GraphAttentionEncoder
-# from data.data_loader import create_data_objects
+from ..data.data_loader import create_data_objects
 
 class PlastiNet:
     def __init__(self, adata, sample_key, radius, spatial_reg=0.2, z_dim=50, lr=0.005, beta=0.2, dropout=0.2, gamma=0.2, weight_decay=5e-4, epochs=30, random_seed=42):
@@ -86,7 +87,7 @@ class PlastiNet:
             self.epoch_losses.append(train_loss)
             scheduler.step()
     
-            if epoch % 15 == 0:
+            if epoch % 1 == 0:
                 print(f"Epoch {epoch}/{self.epochs}, Loss: {train_loss}")
         
         self.model.load_state_dict(best_params)
@@ -94,7 +95,7 @@ class PlastiNet:
 
 
     def run_gat(self):
-        data_list = create_data_objects(adata, self.sample_key)
+        data_list = create_data_objects(self.adata, self.sample_key, self.radius)
         dataloader = DataLoader(data_list, batch_size=1, shuffle=True)
 
         self.train(dataloader)
@@ -114,6 +115,56 @@ class PlastiNet:
         self.neighbor_indices = neighbor_indices
         
         return
+
+    def generate_embeddings_with_ids(self, dataloader):
+        self.model.eval()
+        embeddings, cell_ids, self_attn_weights1, self_attn_weights2, attn_weights1, attn_weights2, neighbor_indices = [], [], [], [], [], [], []
+        
+        max_neighbors = 0
+        
+        for batch in dataloader:
+            batch = batch.to(self.device)
+            with torch.no_grad():
+                z = self.model.encoder(batch.x, batch.edge_index)
+                _, _, attn1, attn2, neighbors = self.model.encoder.get_attention_info()
+    
+                max_neighbors = max(max_neighbors, max(len(n) for n in neighbors))  
+        for batch in dataloader:
+            batch = batch.to(self.device)
+            with torch.no_grad():
+                z = self.model.encoder(batch.x, batch.edge_index)
+                embeddings.append(z.cpu().numpy())
+                cell_ids.extend(batch.cell_ids)
+                self_attn1, self_attn2, attn1, attn2, neighbors = self.model.encoder.get_attention_info()
+    
+                
+                padded_attn1 = np.zeros((len(attn1), max_neighbors, attn1.shape[-1]))
+                padded_attn2 = np.zeros((len(attn2), max_neighbors, attn2.shape[-1]))
+    
+                for i, attn in enumerate(attn1):
+                    padded_attn1[i, :attn.shape[0], :] = attn
+                for i, attn in enumerate(attn2):
+                    padded_attn2[i, :attn.shape[0], :] = attn
+                self_attn_weights1.append(self_attn1.cpu().numpy())
+                self_attn_weights2.append(self_attn2.cpu().numpy())
+                attn_weights1.append(padded_attn1)
+                attn_weights2.append(padded_attn2)
+    
+                neighbors_tensor = torch.nn.utils.rnn.pad_sequence(
+                    [torch.tensor(n, dtype=torch.long, device=self.device) for n in neighbors], 
+                    batch_first=True, padding_value=-1
+                )
+                neighbor_indices.append(neighbors_tensor.cpu().numpy())
+        
+        embeddings = np.concatenate(embeddings, axis=0)
+        self_attn_weights1 = np.concatenate(self_attn_weights1, axis=0)
+        self_attn_weights2 = np.concatenate(self_attn_weights2, axis=0)
+        attn_weights1 = np.concatenate(attn_weights1, axis=0)
+        attn_weights2 = np.concatenate(attn_weights2, axis=0)
+        neighbor_indices = np.concatenate(neighbor_indices, axis=0)
+        
+        return embeddings, cell_ids, self_attn_weights1, self_attn_weights2, attn_weights1, attn_weights2, neighbor_indices
+
 
     def get_embedding_adata(model, dataloader, device):
         model.eval()
