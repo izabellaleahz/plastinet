@@ -2,7 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.lines as mlines
 from matplotlib import colors as mcolors
-
+import networkx as nx
+from torch_geometric.utils import to_networkx
 
 def plot_continous_obs(adata, continuous_obs_name, X_key="X", Y_key="Y", size=1, save_path=None):
     '''
@@ -146,3 +147,17 @@ def plot_expression(adata, gene, x_coord='X', y_coord='Y'):
     plt.tight_layout()
     plt.show()
     return
+
+def plot_graph(graph, node_color='blue', edge_color='gray', node_size=50, figsize=(10, 10)):
+    """
+    Visualize the graph with nodes and edges using networkx and matplotlib.
+
+    Plot using network graphing functions to show how inner connected the network is - so nodes and edges as defined in the constructor of the plastinet class
+
+    should only be a couple lines 
+
+    Eventually want to modify this to show the line weight based on the distance decay - in the attention.py file there is a defined alpha and expoential decay so the line weight representing that is goal eventually so user can pick appropiate values 
+    
+    """ 
+    #TODO 
+    return 
