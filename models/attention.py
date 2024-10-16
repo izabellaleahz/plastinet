@@ -79,8 +79,8 @@ class GraphAttentionEncoder(nn.Module):
         self.reduction_attention_weights = None
         self.neighbor_indices = None
 
-    def forward(self, x, edge_index):
-        x_agg, padded_neighbors, distances, neighbor_indices = self.aggregate_features(x, edge_index)
+    def forward(self, x, edge_index, spatial_coords):
+        x_agg, padded_neighbors, distances, neighbor_indices = self.aggregate_features(x, edge_index, spatial_coords)
         x_agg, self.self_attention_weights, self.neighbor_attention_weights = self.attention(x, padded_neighbors, distances)
 
         self.reduction_attention_weights = self.self_attention_weights
@@ -90,7 +90,7 @@ class GraphAttentionEncoder(nn.Module):
 
         return x_agg
         
-    def aggregate_features(self, x, edge_index):
+    def aggregate_features(self, x, edge_index, spatial_coords):
         row, col = edge_index
         neighbors = x[col].view(-1, x.size(1))
 
@@ -101,7 +101,13 @@ class GraphAttentionEncoder(nn.Module):
 
         for node in range(x.size(0)):
             node_neighbors = neighbors[row == node]
-            node_distances = torch.norm(x[node] - node_neighbors, dim=1)
+        
+      
+            node_coords = spatial_coords[node] 
+            
+            neighbor_coords = spatial_coords[col[row == node]]
+
+            node_distances = torch.norm(node_coords - neighbor_coords, dim=1)
 
             if node_neighbors.size(0) > 0:
                 aggregated = torch.sum(node_neighbors, dim=0)

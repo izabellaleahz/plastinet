@@ -12,6 +12,58 @@ from sklearn.metrics import pairwise_distances
 import numpy as np
 import torch
 
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy.stats import zscore
+from scipy.stats import zscore
+import pandas as pd
+
+from scipy.stats import zscore
+import pandas as pd
+
+def analyze_self_attention(plastinet, adata, subset_key, top_n=15):
+    cell_types = set(adata.obs[subset_key])
+    
+    mean_self_attention_per_type = []
+    valid_cell_types = []
+
+    index_map = {cell: idx for idx, cell in enumerate(adata.obs.index)}
+
+    for cell_type in cell_types:
+        if isinstance(cell_type, str): 
+            # print(f"Processing {cell_type}")
+            subset_indices = adata.obs[adata.obs[subset_key] == cell_type].index
+            subset_positions = [index_map[cell] for cell in subset_indices]
+
+            self_attention_subset = plastinet.self_attn_weights[subset_positions, :]
+            mean_self_attention = np.mean(self_attention_subset, axis=0)
+            if mean_self_attention.size > 0:
+                mean_self_attention_per_type.append(mean_self_attention)
+                valid_cell_types.append(cell_type)
+
+    mean_self_attention_matrix = np.array(mean_self_attention_per_type)
+
+    zscored_self_attention = zscore(mean_self_attention_matrix, axis=1)
+
+    gene_names = adata.var.index
+    attention_df = pd.DataFrame(zscored_self_attention, index=valid_cell_types, columns=gene_names)
+
+
+    top_genes_df = pd.DataFrame(index=valid_cell_types)
+    for cell_type in valid_cell_types:
+        top_genes = attention_df.loc[cell_type].nlargest(top_n).index.tolist()
+        top_genes_df.loc[cell_type, 'Top Genes'] = ', '.join(top_genes)
+    sns.clustermap(zscored_self_attention, cmap='RdGy_r', cbar=True, row_cluster=True, col_cluster=True,
+                   xticklabels=False, yticklabels=valid_cell_types)
+    plt.title('Z-scored Self-Attention Clustermap for All Cell Types')
+    plt.ylabel('Cell Types')
+    plt.xlabel('Genes')
+    plt.show()
+
+    return top_genes_df
+
+
+
 def construct_edge_index_from_spatial(adata, distance_threshold=50):
 
     spatial_coords = adata.obsm['spatial']
