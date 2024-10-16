@@ -1,0 +1,24 @@
+name: plastiNet
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - numpy
+  - pandas
+  - pip
+  - python=3.8
+  - scikit-learn
+  - torchvision
+  - ipykernel
+  # - cpuonly
+  # - torchaudio
+  - matplotlib
+  - anndata
+  - squidpy
+  - gudhi
+  - scanpy=1.9.8
+  - cmcrameri
+  - pip:
+      - torch-geometric
+
+prefix: /home/jupyter/mambaforge/envs/plastiNet
