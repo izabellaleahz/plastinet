@@ -1,2 +1,2 @@
-from .attention_analysis import calculate_attention_scores, calculate_attention_correlations
+from .attention_analysis import analyze_self_attention 
 from .pseudotime import construct_differentiation_path

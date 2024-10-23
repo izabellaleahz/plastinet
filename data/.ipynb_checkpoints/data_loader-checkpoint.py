@@ -9,6 +9,7 @@ def create_data_objects(adata, sample_key, radius):
     spatial_coords = adata.obsm['spatial']
 
     for s in set(adata.obs[sample_key]):
+        # print(s)
         sample = adata[adata.obs[sample_key] == s]
         
         spatial_coords = sample.obsm['spatial']
@@ -24,5 +25,5 @@ def create_data_objects(adata, sample_key, radius):
         data = Data(x=x, edge_index=edge_index, pos=pos, cell_ids=sample.obs.index)
         
         data_list.append(data)
-    
+    # print(len(data_list))
     return data_list

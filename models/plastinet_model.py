@@ -1,4 +1,4 @@
-from torch_geometric.data import DataLoader
+from torch_geometric.loader import DataLoader
 from torch_geometric.nn import DeepGraphInfomax
 import random
 import numpy as np
@@ -11,7 +11,7 @@ from ..visualization.plots import plot_graph
 from ..analysis.attention_analysis import get_gatt, prep_for_gatt
 
 class PlastiNet:
-    def __init__(self, adata, sample_key, radius, spatial_reg=0.2, z_dim=50, lr=0.005, beta=0.2, dropout=0, gamma=0.5, weight_decay=0, epochs=30, random_seed=42):
+    def __init__(self, adata, sample_key, radius, spatial_reg=0.2, z_dim=50, lr=0.005, beta=0.2, dropout=0.2, gamma=0.9, weight_decay=0, epochs=30, random_seed=42):
         self.adata = adata
         self.sample_key = sample_key
         self.radius = radius
@@ -41,8 +41,10 @@ class PlastiNet:
             hidden_channels=self.z_dim,
             encoder=encoder,
             summary=lambda z, *args, **kwargs: torch.sigmoid(z.mean(dim=0)),
-            corruption=lambda x, edge_index, pos: (x[torch.randperm(x.size(0))], edge_index, pos)
+            corruption = lambda x, edge_index, pos: (x * torch.bernoulli(torch.ones_like(x) * 0.7), edge_index, pos)
+            # corruption=lambda x, edge_index, pos: (x[torch.randperm(x.size(0))], edge_index, pos)
         ).to(self.device)
+
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=self.gamma)
@@ -81,17 +83,21 @@ class PlastiNet:
                 for name, param in self.model.encoder.named_parameters():
                     if 'self_attn_layer' in name or 'neighbor_attn_layer' in name:
                         l1_reg += torch.norm(param, p=1)
-                print("DGI: ", 0.5*loss)
+                print("DGI: ", loss)
                 print("spatial: ", penalty_1)
                 print("L1: ", 0.00001 * l1_reg)
-                loss = 0.5 * loss + penalty_1 + 0.00001 * l1_reg
+                loss = loss + penalty_1 + 0.00001 * l1_reg
                 
-                loss = loss.mean()
+                loss = loss.sum()
                 loss.backward()
                 optimizer.step()
                 train_loss += loss.item()
             self.epoch_losses.append(train_loss)
             scheduler.step()
+
+            # for name, param in self.model.named_parameters():
+            #     if param.grad is not None:
+            #         print(f"Gradient for {name}: {param.grad.norm()}")
 
             if epoch % 1 == 0:
                 print(f"Epoch {epoch}/{self.epochs}, Loss: {train_loss}")
@@ -127,19 +133,19 @@ class PlastiNet:
                 cell_ids.extend(batch.cell_ids)
 
                 # Retrieve and detach attention-related outputs
-                self_attn, neighbor_attn, reduction_attn, neighbors = self.model.encoder.get_attention_info()
+                # return self.self_attention_weights1, self.self_attention_weights2, self.neighbor_attention_weights1, self.neighbor_attention_weights2, self.neighbor_attention_weights, self.neighbor_indices = self.model.encoder.get_attention_info()
 
-                self_attn_weights.append(self_attn.detach().cpu().numpy())
-                neighbor_attn_weights.append(neighbor_attn.detach().cpu().numpy())
-                reduction_attn_weights.append(reduction_attn.detach().cpu().numpy())
-                neighbors_tensor = torch.nn.utils.rnn.pad_sequence([torch.tensor(n, dtype=torch.long, device=self.device) for n in neighbors], batch_first=True, padding_value=-1)
-                neighbor_indices.append(neighbors_tensor.cpu().numpy())
+                # self_attn_weights.append(self_attn.detach().cpu().numpy())
+                # neighbor_attn_weights.append(neighbor_attn.detach().cpu().numpy())
+                # reduction_attn_weights.append(reduction_attn.detach().cpu().numpy())
+                # neighbors_tensor = torch.nn.utils.rnn.pad_sequence([torch.tensor(n, dtype=torch.long, device=self.device) for n in neighbors], batch_first=True, padding_value=-1)
+                # neighbor_indices.append(neighbors_tensor.cpu().numpy())
 
         embeddings = np.concatenate(embeddings, axis=0)
-        self_attn_weights = np.concatenate(self_attn_weights, axis=0)
-        neighbor_attn_weights = np.concatenate(neighbor_attn_weights, axis=0)
-        reduction_attn_weights = np.concatenate(reduction_attn_weights, axis=0)
-        neighbor_indices = np.concatenate(neighbor_indices, axis=0)
+        # self_attn_weights = np.concatenate(self_attn_weights, axis=0)
+        # neighbor_attn_weights = np.concatenate(neighbor_attn_weights, axis=0)
+        # reduction_attn_weights = np.concatenate(reduction_attn_weights, axis=0)
+        # neighbor_indices = np.concatenate(neighbor_indices, axis=0)
             # Create an AnnData object for embeddings
         embedding_adata = anndata.AnnData(embeddings)
         embedding_adata.obs.index = cell_ids
