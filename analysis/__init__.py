@@ -1,2 +1,3 @@
-from .attention_analysis import analyze_self_attention 
+from .attention_analysis import plot_attention_heatmap_for_genes 
 from .pseudotime import construct_differentiation_path
+from expression_analysis import plot_pseudotime_heatmap, plot_gam_curves, plot_top_genes_leiden, plot_composition_dotplot

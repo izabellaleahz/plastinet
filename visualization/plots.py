@@ -4,8 +4,10 @@ import matplotlib.lines as mlines
 from matplotlib import colors as mcolors
 import networkx as nx
 from torch_geometric.utils import to_networkx
+from matplotlib.patches import Circle
+import random
 
-def plot_continous_obs(adata, continuous_obs_name, X_key="X", Y_key="Y", size=1, save_path=None):
+def plot_continous_obs(adata, continuous_obs_name, X_key="X", Y_key="Y", size=1, figure_size=(10, 8), save_path=None):
     '''
     Plot a continuous observation from the adata object.
 
@@ -17,7 +19,7 @@ def plot_continous_obs(adata, continuous_obs_name, X_key="X", Y_key="Y", size=1,
         size: Size of the scatter plot points
         save_path: Path to save the plot (optional). If None, displays the plot.
     '''
-    plt.figure(figsize=(12, 8), dpi=300)
+    plt.figure(figsize=figure_size, dpi=300)
     ax = plt.gca()
 
     continuous_obs_values = adata.obs[continuous_obs_name]
@@ -120,7 +122,7 @@ def plot_composition_dot_plot(adata, cluster_key, obs_key):
     return
 
 
-def plot_expression(adata, gene, x_coord='X', y_coord='Y'):
+def plot_expression(adata, gene, x_coord='X', y_coord='Y', figure_size=(12, 8)):
     '''
     Plot the expression level of a specific gene on the spatial map of the tissue.
 
@@ -130,7 +132,7 @@ def plot_expression(adata, gene, x_coord='X', y_coord='Y'):
         x_coord: Key for X-coordinate values in `adata.obs`
         y_coord: Key for Y-coordinate values in `adata.obs`
     '''
-    plt.figure(figsize=(12, 8), dpi=300)
+    plt.figure(figsize=figure_size, dpi=300)
 
     if gene not in adata.var_names:
         raise ValueError(f"{gene} not found in adata.var_names.")
@@ -161,3 +163,41 @@ def plot_graph(graph, node_color='blue', edge_color='gray', node_size=50, figsiz
     """ 
     #TODO 
     return 
+
+def plot_subsample_radius(adata, x_samples=10, radius=50, x_key='X', y_key='Y'):
+
+    x_coords = adata.obs[x_key].values
+    y_coords = adata.obs[y_key].values
+    cell_positions = np.column_stack((x_coords, y_coords))
+    
+    sampled_indices = random.sample(range(len(cell_positions)), x_samples)
+    
+    fig, ax = plt.subplots(1, 2, figsize=(14, 6))
+    
+    cells_in_radius = []
+
+    for idx in sampled_indices:
+        cell_x, cell_y = cell_positions[idx]
+        
+        distances = np.sqrt((cell_positions[:, 0] - cell_x) ** 2 + (cell_positions[:, 1] - cell_y) ** 2)
+        
+        count_in_radius = np.sum(distances <= radius)
+        cells_in_radius.append(count_in_radius)
+
+        ax[0].scatter(cell_x, cell_y, color='blue', label='Sampled cell' if idx == sampled_indices[0] else "")
+        circle = Circle((cell_x, cell_y), radius, color='red', alpha=0.3, linestyle='--')
+        ax[0].add_patch(circle)
+
+    ax[0].scatter(x_coords, y_coords, color='gray', alpha=0.5, s=5, label='All cells')
+    ax[0].set_title('Subsampled Cells with Radius')
+    ax[0].set_xlabel('X Position')
+    ax[0].set_ylabel('Y Position')
+    ax[0].legend()
+
+    ax[1].hist(cells_in_radius, bins=10, color='blue', edgecolor='black')
+    ax[1].set_title('Histogram of Cell Counts within Radius')
+    ax[1].set_xlabel('Number of Cells within Radius')
+    ax[1].set_ylabel('Frequency')
+
+    plt.tight_layout()
+    plt.show()

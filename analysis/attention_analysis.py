@@ -11,187 +11,366 @@ from torch_geometric.data import Data
 from sklearn.metrics import pairwise_distances
 import numpy as np
 import torch
-
-import seaborn as sns
-import matplotlib.pyplot as plt
 from scipy.stats import zscore
-from scipy.stats import zscore
-import pandas as pd
 
-from scipy.stats import zscore
-import pandas as pd
+from plastinet.visualization.plots import plot_tissue
 
-def analyze_self_attention(plastinet, adata, subset_key, top_n=15):
+def plot_continous_obs(adata, continuous_obs_name, X_key="X", Y_key="Y", size=1, save_path=None):
+    '''
+    Plot a continuous observation from the adata object.
+
+    Args:
+        adata: AnnData object
+        continuous_obs_name: Name of the continuous observation in `adata.obs` to plot.
+        X_key: Key for X-coordinate values in `adata.obs`
+        Y_key: Key for Y-coordinate values in `adata.obs`
+        size: Size of the scatter plot points
+        save_path: Path to save the plot (optional). If None, displays the plot.
+    '''
+    plt.figure(figsize=(12, 8), dpi=300)
+    ax = plt.gca()
+
+    continuous_obs_values = adata.obs[continuous_obs_name]
+    continuous_obs_values = np.ravel(continuous_obs_values)
+    scatter = plt.scatter(adata.obs[X_key], adata.obs[Y_key], s=size, c=continuous_obs_values, cmap='RdGy_r')
+
+    cbar = plt.colorbar(scatter)
+    cbar.set_label(f'Value of {continuous_obs_name}')
+
+    plt.title(f"{continuous_obs_name}")
+    plt.xlabel('X-axis')
+    plt.ylabel('Y-axis')
+
+    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+
+    if save_path is None:
+        plt.show()
+    else:
+        plt.savefig(save_path)
+    return
+
+
+def plot_attention_heatmap_for_genes(plastinet, adata, subset_key, gene_list):
+    """
+    Plot a heatmap of self-attention flow for a specific list of input genes.
+
+    Parameters:
+    plastinet: The model object containing self-attention weights.
+    adata: Annotated data object.
+    subset_key: The key in adata.obs that denotes cell types.
+    gene_list: A list of genes for which the attention flow will be visualized.
+
+    Returns:
+    None, displays a heatmap of attention flow for the specified genes.
+    """
+
+    valid_genes = [gene for gene in gene_list if gene in adata.var.index]
+
+    if len(valid_genes) == 0:
+        raise ValueError("None of the genes in the input list are found in the dataset.")
+
+    gene_indices = [np.where(adata.var.index == gene)[0][0] for gene in valid_genes]
+
     cell_types = set(adata.obs[subset_key])
-    
     mean_self_attention_per_type = []
     valid_cell_types = []
-
     index_map = {cell: idx for idx, cell in enumerate(adata.obs.index)}
 
     for cell_type in cell_types:
-        if isinstance(cell_type, str): 
-            # print(f"Processing {cell_type}")
+        if isinstance(cell_type, str):
             subset_indices = adata.obs[adata.obs[subset_key] == cell_type].index
             subset_positions = [index_map[cell] for cell in subset_indices]
 
-            self_attention_subset = plastinet.self_attn_weights[subset_positions, :]
-            mean_self_attention = np.mean(self_attention_subset, axis=0)
+            attn_flow = np.sum(plastinet.self_attn_weights1[subset_positions, :], plastinet.self_attn_weights2[subset_positions, :])
+            
+            mean_self_attention = np.mean(attn_flow[:, gene_indices], axis=0)
+            
             if mean_self_attention.size > 0:
                 mean_self_attention_per_type.append(mean_self_attention)
                 valid_cell_types.append(cell_type)
 
     mean_self_attention_matrix = np.array(mean_self_attention_per_type)
 
-    zscored_self_attention = zscore(mean_self_attention_matrix, axis=1)
+    log_mean_self_attention_matrix = np.log1p(mean_self_attention_matrix)
 
-    gene_names = adata.var.index
-    attention_df = pd.DataFrame(zscored_self_attention, index=valid_cell_types, columns=gene_names)
+    attention_df = pd.DataFrame(log_mean_self_attention_matrix, index=valid_cell_types, columns=valid_genes)
 
+    plt.figure(figsize=(10, 6))
+    sns.clustermap(attention_df, cmap='RdGy_r', cbar=True, annot=True, fmt='.2f', linewidths=0.5, xticklabels=valid_genes, yticklabels=valid_cell_types)
+    plt.title('Attention Flow for Selected Genes (Self-Attention)')
+    plt.xlabel('Genes')
+    plt.ylabel('Cell Types')
+    plt.xticks(rotation=90)
+    plt.show()
+
+
+def analyze_attention_deg(plastinet, adata, subset_key, top_n=15, min_threshold=0.0001):
+    """
+    Analyze attention flow between cell types and find genes with differential attention flow.
+    """
+    cell_types = set(adata.obs[subset_key])
+    
+    mean_self_attention_per_type = []
+    valid_cell_types = []
+    index_map = {cell: idx for idx, cell in enumerate(adata.obs.index)}
+
+    for cell_type in cell_types:
+        if isinstance(cell_type, str):
+            subset_indices = adata.obs[adata.obs[subset_key] == cell_type].index
+            subset_positions = [index_map[cell] for cell in subset_indices]
+
+            # attn_flow = np.multiply(plastinet.self_attn_weights1[subset_positions, :], plastinet.self_attn_weights2[subset_positions, :])
+            attn_flow = np.add(plastinet.self_attn_weights1[subset_positions, :], plastinet.self_attn_weights2[subset_positions, :])
+
+            mean_self_attention = np.mean(attn_flow, axis=0)
+
+            if mean_self_attention.size > 0:
+                mean_self_attention_per_type.append(mean_self_attention)
+                valid_cell_types.append(cell_type)
+
+    mean_self_attention_matrix = np.array(mean_self_attention_per_type)
+
+    col_mask = np.nanmax(mean_self_attention_matrix, axis=0) > min_threshold
+    mean_self_attention_matrix = mean_self_attention_matrix[:, col_mask]
+    gene_names = adata.var.index[col_mask]
+
+    zscored_attention_matrix = zscore(mean_self_attention_matrix, axis=0)
+
+    attention_df = pd.DataFrame(zscored_attention_matrix, index=valid_cell_types, columns=gene_names)
 
     top_genes_df = pd.DataFrame(index=valid_cell_types)
     for cell_type in valid_cell_types:
         top_genes = attention_df.loc[cell_type].nlargest(top_n).index.tolist()
         top_genes_df.loc[cell_type, 'Top Genes'] = ', '.join(top_genes)
-    sns.clustermap(zscored_self_attention, cmap='RdGy_r', cbar=True, row_cluster=True, col_cluster=True,
-                   xticklabels=False, yticklabels=valid_cell_types)
-    plt.title('Z-scored Self-Attention Clustermap for All Cell Types')
+
+    plt.figure(figsize=(12, 8))
+    sns.clustermap(zscored_attention_matrix, cmap='RdGy_r', cbar=True, row_cluster=True, col_cluster=True,
+                   xticklabels=gene_names, yticklabels=valid_cell_types)
+    plt.title('Z-scored Attention Flow Clustermap (Self-Attention Layer 1 * Layer 2)')
     plt.ylabel('Cell Types')
     plt.xlabel('Genes')
+    plt.xticks(rotation=90)
     plt.show()
 
     return top_genes_df
-
-
-
-def construct_edge_index_from_spatial(adata, distance_threshold=50):
-
-    spatial_coords = adata.obsm['spatial']
-
-    distances = pairwise_distances(spatial_coords)
     
-    mask = (distances < distance_threshold) & (distances > 0)
+def analyze_self_attention_across_pseudotime(plastinet, adata, pseudotime_key, genes_of_interest, pseudotime_bins=5):
+
+    if pseudotime_key not in adata.obs.columns:
+        raise ValueError(f"Pseudotime key '{pseudotime_key}' not found in adata.obs.")
     
-    edge_index = np.array(np.nonzero(mask))
+    missing_genes = [gene for gene in genes_of_interest if gene not in adata.var.index]
+    if missing_genes:
+        raise ValueError(f"The following genes are not present in adata.var: {', '.join(missing_genes)}")
     
-    edge_index = torch.tensor(edge_index, dtype=torch.long)
+    gene_indices = [adata.var.index.get_loc(gene) for gene in genes_of_interest]
     
-    return edge_index
-
-def adata_to_pyg_data_with_edges(adata, edge_index=None, method='distance', k=10, distance_threshold=50):
-
-    x = torch.tensor(adata.X, dtype=torch.float)
-    pos = torch.tensor(adata.obsm['spatial'], dtype=torch.float)
-
-    if edge_index is None:
-        if method == 'knn':
-            edge_index = construct_edge_index_from_knn(adata, k=k)
-        elif method == 'distance':
-            edge_index = construct_edge_index_from_spatial(adata, distance_threshold=distance_threshold)
+    pseudotime_vals = adata.obs[pseudotime_key].dropna()
+    bins = np.linspace(pseudotime_vals.min(), pseudotime_vals.max(), pseudotime_bins + 1)
+    pseudotime_labels = pd.cut(pseudotime_vals, bins=bins, labels=False)
     
-    data = Data(x=x, pos=pos, edge_index=edge_index)
-    
-    return data
+    target_cells = adata.obs[~adata.obs[pseudotime_key].isna()]
+    target_positions = target_cells.index.map(lambda cell: np.where(adata.obs.index == cell)[0][0])
+    np.zeros((pseudotime_bins, len(genes_of_interest)))
+    attention_flow_matrix = np.zeros((pseudotime_bins, len(genes_of_interest)))
 
 
-def return_edges_in_k_hop(
-    data: Data, target_idx: int, hop: int, self_loops: bool = False, return_as_tensor: bool = False
-) -> List[Tuple[int, int]]:
-    '''
-    Exstracts subgraph - returns all edges in k hop 
-    '''
-    if hop <= 0:
-        raise ValueError("Hop must be greater than 0")
-    edge_index = add_self_loops(remove_self_loops(data.edge_index)[0])[0] if self_loops else remove_self_loops(data.edge_index)[0]
+    for bin_label in range(pseudotime_bins):
+        bin_positions = target_cells[pseudotime_labels == bin_label].index.map(lambda cell: np.where(adata.obs.index == cell)[0][0])
 
-    _, _, _, inv = k_hop_subgraph(node_idx=target_idx, num_hops=hop, edge_index=edge_index, relabel_nodes=True)
-    return edge_index[:, inv].t().tolist() if not return_as_tensor else edge_index[:, inv]
+        if len(bin_positions) == 0:
+            continue
+        
+        self_attn_flows = []
 
-@torch.no_grad()
-def generate_att_dict(model, data, sparse: bool = False) -> Dict:
-    '''
-    Constructs attention matrix for access.
-    Extracts attention weights from your model.
-    '''
+       
+        for target_pos in bin_positions:
+           
+            flow = (
+                np.sum(plastinet.neighbor_attn_weights1[target_pos, :, :], axis=0)[gene_indices] +
+                np.sum(plastinet.neighbor_attn_weights2[target_pos, :, :], axis=0)[gene_indices]
+            )
+            
+            self_attn_flows.append(flow)
 
-    model(data.x, data.edge_index)
-    
-    att1 = model.self_attention_weights
-    att2 = model.neighbor_attention_weights
+       
+        if len(self_attn_flows) > 0:
+            avg_flow = np.mean(self_attn_flows, axis=0)
+            attention_flow_matrix[bin_label, :] = avg_flow
 
-    if att1 is None or att2 is None:
-        raise AttributeError("Attention weights are not populated in the model.")
-    
-    att_matrix_dict = {}
-    device = att1.device 
-    att_matrix_dict[0] = torch.zeros((data.num_nodes, data.num_nodes), device=device)
-    att_matrix_dict[1] = torch.zeros((data.num_nodes, data.num_nodes), device=device)
-    
-    for i in range(att1.size(0)): 
-        att_matrix_dict[0][data.edge_index[0, i], data.edge_index[1, i]] = att1[i].mean(dim=0)
-    for i in range(att2.size(0)):  
-        att_matrix_dict[1][data.edge_index[0, i], data.edge_index[1, i]] = att2[i].mean(dim=0)
-
-    return att_matrix_dict
-
-def prep_for_gatt(model, data, num_hops: int = 2, sparse: bool = False) -> Tuple[Dict, Dict]:
-    '''
-    Computes the attention matrices as well as correction matrices to account for multi-hop message passing in the graph.
-    '''
-    att_matrix_dict = generate_att_dict(model=model, data=data, sparse=sparse)
-    
-    if num_hops > len(att_matrix_dict):
-        raise ValueError(f"num_hops ({num_hops}) exceeds the number of attention layers ({len(att_matrix_dict)}).")
-    
-    correction_matrix_dict = {0: torch.eye(data.num_nodes).to(data.x.device)}  
-    for idx in range(1, num_hops):
-        if correction_matrix_dict[idx - 1].shape[1] != att_matrix_dict[num_hops - idx].shape[0]:
-            raise ValueError(f"Shape mismatch: Correction matrix shape {correction_matrix_dict[idx - 1].shape} "
-                             f"and attention matrix shape {att_matrix_dict[num_hops - idx].shape}")
-        correction_matrix_dict[idx] = correction_matrix_dict[idx - 1] @ att_matrix_dict[num_hops - idx]
-
-    return att_matrix_dict, correction_matrix_dict
-
-
-def avgatt(target_edge: Tuple[int, int], att_matrix_dict: Dict, num_hops: int = 2) -> float:
-    '''
-    Calculates the average attention weight for a specific edge across all layers.
-    '''
-    return sum(att_matrix_dict[m][target_edge[1], target_edge[0]].item() for m in range(num_hops)) / num_hops
-
-def get_avgatt(target_node, model, data, sparse: bool = True) -> Tuple[List[float], List[Tuple[int, int]]]:
-    '''
-    Returns the average attention scores instead of the more complex GATT scores.
-    '''
-    num_hops = model.num_layers  # 2 layers
-    att_matrix_dict, _ = prep_for_gatt(model=model, data=data, num_hops=num_hops, sparse=sparse)
-
-    edges_in_k_hop = return_edges_in_k_hop(data=data, target_idx=target_node, hop=num_hops, self_loops=True)
-    avgatt_list = [avgatt(current_edge, att_matrix_dict, num_hops) for current_edge in edges_in_k_hop]
-
-    return avgatt_list, edges_in_k_hop
-
-
-def gatt(target_edge: Tuple[int, int], ref_node: int, att_matrix_dict: Dict, correction_matrix_dict: Dict, num_hops: int = 2) -> float:
-    '''
-    Calculate the GATT score by considering multi-hop attention information.
-    '''
-    src_idx, tgt_idx = target_edge
  
-    gatt_score = (
-        correction_matrix_dict[num_hops - 2][ref_node, tgt_idx].item() * att_matrix_dict[0][tgt_idx, src_idx].item()
-        + att_matrix_dict[1][tgt_idx, src_idx].item()
-    )
-    return gatt_score
+    gene_means = attention_flow_matrix.mean(axis=0)
+    gene_stds = attention_flow_matrix.std(axis=0)
+    attention_flow_matrix = (attention_flow_matrix - gene_means) / gene_stds
 
-def get_gatt(target_node, model, data, sparse: bool = True) -> Tuple[List[float], List[Tuple[int, int]]]:
-    '''
-    Returns the GATT values for a target node, taking into account all edges in the k-hop neighborhood.
-    '''
-    num_hops = model.num_layers  # Your model has 2 layers
-    att_matrix_dict, correction_matrix_dict = prep_for_gatt(model=model, data=data, num_hops=num_hops, sparse=sparse)
+    plt.figure(figsize=(10, 6))
+    sns.heatmap(attention_flow_matrix, cmap='RdGy_r', cbar=True, yticklabels=range(pseudotime_bins), xticklabels=genes_of_interest)
+    plt.title(f'Self-Attention Flow for Specified Genes across Pseudotime')
+    plt.xlabel('Genes')
+    plt.ylabel('Pseudotime Bins')
+    plt.show()
 
-    edges_in_k_hop = return_edges_in_k_hop(data=data, target_idx=target_node, hop=num_hops, self_loops=True)
-    gatt_list = [gatt(current_edge, target_node, att_matrix_dict, correction_matrix_dict, num_hops) for current_edge in edges_in_k_hop]
+    attention_flow_df = pd.DataFrame(attention_flow_matrix, columns=genes_of_interest)
+    
+    return attention_flow_df
 
-    return gatt_list, edges_in_k_hop
+
+def visualize_gene_attention_across_pseudotime(plastinet, adata, subset_key, pseudotime_key, cell_type, genes_of_interest, pseudotime_bins=10):
+    """
+    Analyze attention flow across pseudotime for a specific target cell type, focusing on differential attention changes for specified genes.
+    
+    Parameters:
+    plastinet: The model object containing attention weights.
+    adata: Annotated data object.
+    subset_key: The key in adata.obs that denotes cell types.
+    pseudotime_key: The key in adata.obs that denotes pseudotime values.
+    cell_type: The specific cell type to consider as neighbors.
+    genes_of_interest: List of gene names (strings) to analyze.
+    pseudotime_bins: Number of bins to group cells based on pseudotime values.
+
+    Returns:
+    A DataFrame summarizing the differential attention flow across pseudotime for each specified gene.
+    """
+    
+    # Ensure pseudotime exists
+    if pseudotime_key not in adata.obs.columns:
+        raise ValueError(f"Pseudotime key '{pseudotime_key}' not found in adata.obs.")
+    
+    # Ensure genes_of_interest are in the adata.var index
+    missing_genes = [gene for gene in genes_of_interest if gene not in adata.var.index]
+    if missing_genes:
+        raise ValueError(f"The following genes are not present in adata.var: {', '.join(missing_genes)}")
+    
+    # Map genes of interest to their indices
+    gene_indices = [adata.var.index.get_loc(gene) for gene in genes_of_interest]
+    
+    # Get the pseudotime values and create bins
+    pseudotime_vals = adata.obs[pseudotime_key].dropna()
+    bins = np.linspace(pseudotime_vals.min(), pseudotime_vals.max(), pseudotime_bins + 1)
+    pseudotime_labels = pd.cut(pseudotime_vals, bins=bins, labels=False)
+    adata.obs["pseudotime_bins"] = pseudotime_labels  # Save pseudotime bins for plotting
+    
+    # Filter cells with pseudotime and map to bin
+    target_cells = adata.obs[~adata.obs[pseudotime_key].isna()]
+    target_positions = target_cells.index.map(lambda cell: np.where(adata.obs.index == cell)[0][0])
+
+    # Initialize matrix for attention flow across pseudotime bins for specified genes
+    attention_flow_matrix = np.zeros((pseudotime_bins, len(genes_of_interest)))
+
+    attention_flow_results = []
+
+    # Iterate over pseudotime bins
+    for bin_label in range(pseudotime_bins):
+        bin_positions = target_cells[pseudotime_labels == bin_label].index.map(lambda cell: np.where(adata.obs.index == cell)[0][0])
+
+        if len(bin_positions) == 0:
+            continue
+        
+        neighbor_attn_flows = []
+
+        # For each target cell, get its neighbors and their attention flow
+        for target_pos in bin_positions:
+            neighbors = plastinet.neighbor_indices[target_pos]
+            valid_neighbors = []
+
+            # For each neighbor, check if it's the specified cell type
+            for idx, neighbor_pos in enumerate(neighbors):
+                if adata.obs.iloc[neighbor_pos][subset_key] == cell_type:
+                    valid_neighbors.append(idx)
+
+            if len(valid_neighbors) == 0:
+                continue
+
+            # Calculate attention flow from valid neighbors (specific cell type) for genes of interest
+            flow = (
+                np.sum(plastinet.neighbor_attn_weights1[target_pos, valid_neighbors, :][:, gene_indices], axis=0) +
+                np.sum(plastinet.neighbor_attn_weights2[target_pos, valid_neighbors, :][:, gene_indices], axis=0)
+            )
+            
+            # Normalize by the number of stromal cells in the neighborhood
+            flow = flow / len(valid_neighbors) if len(valid_neighbors) > 0 else flow
+            
+            # Sum the flows from all neighbors for the target cell
+            neighbor_attn_flows.append(flow)
+
+        # Average the flows across all cells in the bin
+        if len(neighbor_attn_flows) > 0:
+            avg_flow = np.mean(neighbor_attn_flows, axis=0)
+            attention_flow_matrix[bin_label, :] = avg_flow
+
+            # Store the result for this bin
+            attention_flow_results.append({
+                'Pseudotime Bin': bin_label,
+                'Gene Attention Flows': dict(zip(genes_of_interest, avg_flow))
+            })
+
+    # Normalize attention flow matrix with Z-score normalization across genes
+    gene_means = attention_flow_matrix.mean(axis=0)
+    gene_stds = attention_flow_matrix.std(axis=0)
+    attention_flow_matrix = (attention_flow_matrix - gene_means) / gene_stds
+
+    # Plot heatmap of attention flow across pseudotime bins for the specified genes
+    plt.figure(figsize=(10, 6))
+    sns.clustermap(attention_flow_matrix, cmap='RdGy_r', cbar=True, yticklabels=range(pseudotime_bins), xticklabels=genes_of_interest, row_cluster=False, col_cluster=True)
+    plt.title(f'Differential Attention Flow from {cell_type} Neighbors across Pseudotime for Specified Genes')
+    plt.xlabel('Genes')
+    plt.ylabel('Pseudotime Bins')
+    plt.show()
+    # print(adata)
+    # Plot pseudotime bins in spatial context
+    plot_tissue(adata, "pseudotime_bins")
+    plot_tissue(adata, "subset")
+
+    # Ensure all gene attention values are calculated and stored
+    for gene, gene_index in zip(genes_of_interest, gene_indices):
+        gene_attention = np.zeros(adata.shape[0])  # Initialize attention values for all cells
+        for target_pos in target_positions:
+            neighbors = plastinet.neighbor_indices[target_pos]
+            valid_neighbors = [idx for idx, neighbor_pos in enumerate(neighbors) if adata.obs.iloc[neighbor_pos][subset_key] == cell_type]
+            if len(valid_neighbors) > 0:
+                gene_attention[target_pos] = np.mean(
+                    plastinet.neighbor_attn_weights1[target_pos, valid_neighbors, gene_index] *
+                    plastinet.neighbor_attn_weights2[target_pos, valid_neighbors, gene_index]
+                )
+        adata.obs[f"{gene}_attention"] = gene_attention  # Store attention for plotting
+
+    # Set up grid plot for attention values
+    num_genes = len(genes_of_interest)
+    grid_size = int(np.ceil(np.sqrt(num_genes)))
+    fig, axes = plt.subplots(grid_size, grid_size, figsize=(15, 15))
+    axes = axes.flatten()
+
+    # Plot each gene attention in the grid
+    for i, gene in enumerate(genes_of_interest):
+        if f"{gene}_attention" in adata.obs:  # Check if key exists in adata.obs
+            ax = axes[i]
+            gene_attention_values = adata.obs[f"{gene}_attention"].values.ravel()
+            
+                # Scatter plot for spatial distribution of gene attention values
+            scatter = ax.scatter(
+                adata.obs["X"], adata.obs["Y"],
+                s=1, c=gene_attention_values, cmap='RdGy_r'
+            )
+            
+            # Color bar and title settings for each subplot
+            cbar = fig.colorbar(scatter, ax=ax, fraction=0.046, pad=0.04)
+            cbar.set_label(f'{gene} Attention Value', rotation=270, labelpad=15)
+            
+            ax.set_title(f"Attention for {gene}")
+            ax.set_xlabel("X-axis")
+            ax.set_ylabel("Y-axis")
+        else:
+            print(f"Warning: {gene}_attention not found in adata.obs, skipping this gene.")
+    
+    # Hide any unused subplots if the grid is larger than the number of genes
+    for i in range(num_genes, grid_size * grid_size):
+        axes[i].axis("off")
+    
+    plt.tight_layout()
+    plt.show()
+
+
+    attention_flow_df = pd.DataFrame(attention_flow_matrix, columns=genes_of_interest)
+    
+    return attention_flow_df

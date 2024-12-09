@@ -1,12 +1,13 @@
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch 
 
 class SelfNeighborAttention(nn.Module):
-    def __init__(self, gene_dim, radius, beta=0.5, attention_threshold=0.01):
+    def __init__(self, gene_dim, radius, beta, alpha, attention_threshold=0.01):
         super(SelfNeighborAttention, self).__init__()
         self.gene_dim = gene_dim
-        self.beta = nn.Parameter(torch.tensor(beta)) 
+        self.beta = beta
+        self.alpha = alpha
         self.radius = radius 
         self.attention_threshold = attention_threshold
         
@@ -24,8 +25,7 @@ class SelfNeighborAttention(nn.Module):
         neighbor_attn_scores = self.neighbor_attn_layer(neighbors)
     
         normalized_distances = distances / (self.radius + 1e-8)
-        alpha = 2
-        distance_weights = torch.exp(-alpha * normalized_distances)
+        distance_weights = torch.exp(-self.alpha * normalized_distances)
         weighted_neighbor_scores = neighbor_attn_scores * distance_weights.unsqueeze(-1)
     
         combined_scores = torch.cat([self_attn_scores.unsqueeze(1), weighted_neighbor_scores], dim=1)
@@ -38,8 +38,7 @@ class SelfNeighborAttention(nn.Module):
         # neighbor_attn_weights = torch.where(torch.abs(neighbor_attn_weights) >= self.attention_threshold, neighbor_attn_weights, torch.zeros_like(neighbor_attn_weights))
         # self_attn_weights = torch.where(torch.abs(self_attn_weights) >= self.attention_threshold, self_attn_weights, torch.zeros_like(self_attn_weights))
 
-        context_vector = self.beta * (self_attn_weights * target_cell) + \
-                         (1 - self.beta) * torch.sum(neighbor_attn_weights * neighbors, dim=1)
+        context_vector = self.beta * (self_attn_weights * target_cell) + (1 - self.beta) * torch.sum(neighbor_attn_weights * neighbors, dim=1)
     
         return context_vector, self_attn_weights, neighbor_attn_weights
 
@@ -52,15 +51,16 @@ class SelfNeighborAttention(nn.Module):
 
 
 class GraphAttentionEncoder(nn.Module):
-    def __init__(self, gene_dim, z_dim, radius, dropout_rate, beta=0.5):
+    def __init__(self, gene_dim, z_dim, radius, dropout_rate, beta_1, beta_2, alpha, attention_threshold):
         super(GraphAttentionEncoder, self).__init__()
         self.radius = radius
         self.gene_dim = gene_dim
         self.z_dim = z_dim
         self.dropout_rate = dropout_rate
+        self.attention_threshold = attention_threshold 
 
-        self.attention1 = SelfNeighborAttention(gene_dim, radius, beta)
-        self.attention2 = SelfNeighborAttention(gene_dim, radius, beta)
+        self.attention1 = SelfNeighborAttention(gene_dim, radius, beta_1, alpha, self.attention_threshold)
+        self.attention2 = SelfNeighborAttention(gene_dim, radius, beta_2, alpha, self.attention_threshold)
         
         self.reduction_matrix = nn.Linear(gene_dim, z_dim)
 
@@ -137,7 +137,7 @@ class GraphAttentionEncoder(nn.Module):
         return aggregated_features, padded_neighbors, distances, neighbor_indices_list
 
     def get_attention_info(self):
-        return self.self_attention_weights1, self.self_attention_weights2, self.neighbor_attention_weights1, self.neighbor_attention_weights2, self.neighbor_attention_weights, self.neighbor_indices
+        return self.self_attention_weights1, self.self_attention_weights2, self.neighbor_attention_weights1, self.neighbor_attention_weights2, self.neighbor_indices, self.reduction_matrix
 
     def _initialize_weights(self):
         for m in self.modules():

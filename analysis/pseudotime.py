@@ -62,10 +62,16 @@ def construct_differentiation_path(embedding_adata, adata, cell_type_obs, cell_t
         inverted_basal_keys = [f'inverted_dpt_pseudotime_global_{i}' for i in range(1, N+1)]
         pseudotime_df['avg_inverted_end_pseudotime'] = pseudotime_df[inverted_basal_keys].mean(axis=1, skipna=True)
 
-        pseudotime_df['final_avg_pseudotime'] = pseudotime_df[['avg_start_pseudotime', 'avg_inverted_end_pseudotime']].mean(axis=1, skipna=True)
+        
+    pseudotime_df['final_avg_pseudotime'] = (
+    pseudotime_df['final_avg_pseudotime'] - pseudotime_df['final_avg_pseudotime'].min()
+) / (
+    pseudotime_df['final_avg_pseudotime'].max() - pseudotime_df['final_avg_pseudotime'].min()
+)
 
     embedding_adata.obs['final_avg_pseudotime'] = pseudotime_df['final_avg_pseudotime']
     gat_epi.obs["final_avg_pseudotime"] = embedding_adata.obs['final_avg_pseudotime']
     gat_epi.obs["final_avg_pseudotime"].hist()
+    
+    return 
 
-    return
