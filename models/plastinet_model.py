@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # plastinet/models/plastinet_model.py
 import torch
 import torch.nn as nn
@@ -14,6 +13,8 @@ from sklearn.metrics import silhouette_score
 from .attention import GraphAttentionEncoder
 from ..data.data_loader import create_data_objects
 
+
+
 class PlastiNet:
     def __init__(
         self,
@@ -21,13 +22,13 @@ class PlastiNet:
         sample_key,
         radius,
         spatial_reg=0.2,
-        l1_reg = 1e-5, 
+        l1_reg=1e-5,
         z_dim=50,
         lr=0.001,
-        beta_1= 0.2,
-        beta_2 = 0.8,
+        beta_1=0.2,
+        beta_2=0.8,
         alpha=3,
-        attention_threshold = 0.01,
+        attention_threshold=0.01,
         dropout=0.2,
         gamma=0.8,
         weight_decay=0.005,
@@ -36,27 +37,8 @@ class PlastiNet:
         patience=10,
         mask_n=0.7,
         spatial_percent=0.2,
-        step_size=5
+        step_size=5,
     ):
-=======
-from torch_geometric.data import DataLoader
-from torch_geometric.nn import DeepGraphInfomax
-import random
-import numpy as np
-import torch
-import anndata
-
-from .attention import GraphAttentionEncoder
-from ..data.data_loader import create_data_objects
-<<<<<<< HEAD
-=======
-from ..visualization.plots import plot_graph
-from ..analysis.attention_analysis import get_gatt, prep_for_gatt
->>>>>>> 84a829e9d3709a5972eadb8c43d4608919d42752
-
-class PlastiNet:
-    def __init__(self, adata, sample_key, radius, spatial_reg=0.2, z_dim=50, lr=0.001, beta=0.2, dropout=0, gamma=0.5, weight_decay=0, epochs=30, random_seed=42):
->>>>>>> e2126d572fe3fd096e14f36fc038f7141668dfe2
         self.adata = adata
         self.sample_key = sample_key
         self.radius = radius
@@ -65,7 +47,7 @@ class PlastiNet:
         self.lr = lr
         self.beta_1 = beta_1
         self.beta_2 = beta_2
-        self.alpha = alpha  
+        self.alpha = alpha
         self.attention_threshold = attention_threshold
         self.dropout = dropout
         self.gamma = gamma
@@ -78,34 +60,27 @@ class PlastiNet:
         self.step_size = step_size
         self.l1_reg = l1_reg
 
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
-        self.cluster_centers = None
 
         torch.manual_seed(self.random_seed)
         np.random.seed(self.random_seed)
-<<<<<<< HEAD
         import random
+
         random.seed(self.random_seed)
 
     def train(self, dataloader):
-        # Initialize the encoder with float alpha and beta
+        # Initialize the encoder
         encoder = GraphAttentionEncoder(
             self.adata.shape[1],
             self.z_dim,
             self.radius,
             dropout_rate=self.dropout,
-            beta_1 = self.beta_1,
-            beta_2 = self.beta_2,
+            beta_1=self.beta_1,
+            beta_2=self.beta_2,
             alpha=self.alpha,
-            attention_threshold = self.attention_threshold
+            attention_threshold=self.attention_threshold,
         ).to(self.device)
-=======
-        # TODO: Make this a percentage that is passed in so for ex 0.2 is 20% of all the input cells 
-        edge_subset_sz = 10000
-
-        encoder = GraphAttentionEncoder(self.adata.shape[1], self.z_dim, self.radius, dropout_rate=self.dropout, beta=self.beta)
->>>>>>> e2126d572fe3fd096e14f36fc038f7141668dfe2
 
         self.model = DeepGraphInfomax(
             hidden_channels=self.z_dim,
@@ -114,77 +89,27 @@ class PlastiNet:
             corruption=lambda x, edge_index, pos: (
                 x * torch.bernoulli(torch.ones_like(x) * self.mask_n),
                 edge_index,
-                pos
-            )
+                pos,
+            ),
         ).to(self.device)
 
-<<<<<<< HEAD
-        
+        optimizer = optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=self.step_size, gamma=self.gamma)
 
-        optimizer = optim.Adam(
-            self.model.parameters(),
-            lr=self.lr,
-            weight_decay=self.weight_decay
-        )
-
-        # Use StepLR scheduler
-        scheduler = optim.lr_scheduler.StepLR(
-            optimizer,
-            step_size=self.step_size,
-            gamma=self.gamma
-        )
-
-        best_metric = float('inf')
+        best_metric = float("inf")
         patience_counter = 0
 
-        dgi_loss_list = []
-        l1_loss_list = []
-        spatial_loss_list = []
-        total_loss_list = []
-
-=======
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=self.gamma)
-        best_params = self.model.state_dict()
-        
->>>>>>> e2126d572fe3fd096e14f36fc038f7141668dfe2
         for epoch in range(self.epochs):
-            self.model.train()  # Set model to training mode
+            self.model.train()
             train_loss = 0.0
-            epoch_dgi_loss = 0.0
-            epoch_l1_loss = 0.0
-            epoch_spatial_loss = 0.0
 
             for batch in dataloader:
                 batch = batch.to(self.device)
                 optimizer.zero_grad()
-<<<<<<< HEAD
 
-                # Forward pass with internal corruption handling
-                pos_z, neg_z, summary= self.model(batch.x, batch.edge_index, batch.pos)
-=======
-                z, _, summary = self.model(batch.x, batch.edge_index)
-                corrupted_z, corrupted_edge_index = self.model.corruption(z, batch.edge_index)
-                loss = self.model.loss(z, corrupted_z, summary)
-                coords = torch.tensor(batch.pos).float().to(self.device)
-    
-                # Calculate the distances
-                cell_random_subset_1, cell_random_subset_2 = torch.randint(0, z.shape[0], (edge_subset_sz,)).to(self.device), torch.randint(0, z.shape[0], (edge_subset_sz,)).to(self.device)
-                z1, z2 = torch.index_select(z, 0, cell_random_subset_1), torch.index_select(z, 0, cell_random_subset_2)
-                c1, c2 = torch.index_select(coords, 0, cell_random_subset_1), torch.index_select(coords, 0, cell_random_subset_2)
-                pdist = torch.nn.PairwiseDistance(p=2)
-                
-                z_dists = pdist(z1, z2)
-                z_dists = z_dists / torch.max(z_dists)
-                
-                sp_dists = pdist(c1, c2)
-                sp_dists = sp_dists / torch.max(sp_dists)
-                n_items = z_dists.size(dim=0)
->>>>>>> e2126d572fe3fd096e14f36fc038f7141668dfe2
-                
-                # neg_z, _, _ = self.model.corruption(pos_z, batch.edge_index, batch.pos)
+                pos_z, _, summary = self.model(batch.x, batch.edge_index, batch.pos)
+                neg_z, _, _ = self.model.corruption(batch.x, batch.edge_index, batch.pos)
 
-                
                 # DGI Loss
                 dgi_loss = self.model.loss(pos_z, neg_z, summary)
 
@@ -192,309 +117,133 @@ class PlastiNet:
                 spatial_loss = self.compute_spatial_loss(pos_z, batch.pos, self.spatial_percent)
 
                 # L1 Regularization Loss
-                l1_loss = 0.0
-                for name, param in self.model.encoder.named_parameters():
-<<<<<<< HEAD
-                    if 'attn' in name and param.requires_grad:
-                        l1_loss += torch.norm(param, p=1)
-                l1_loss = self.l1_reg * l1_loss
-                spatial_loss = self.spatial_reg * spatial_loss
+                l1_loss = sum(
+                    torch.norm(param, p=1)
+                    for name, param in self.model.encoder.named_parameters()
+                    if "attn" in name and param.requires_grad
+                )
+                l1_loss *= self.l1_reg
+
                 # Total Loss
-                total_loss = dgi_loss + spatial_loss + l1_loss
-
-                # Backward pass and optimization
+                total_loss = dgi_loss + spatial_loss * self.spatial_reg + l1_loss
                 total_loss.backward()
-=======
-                    if 'self_attn_layer' in name or 'neighbor_attn_layer' in name:
-                        l1_reg += torch.norm(param, p=1)
-                print("DGI: ", 0.5*loss)
-                print("spatial: ", penalty_1)
-                print("L1: ", 0.00001 * l1_reg)
-                loss = 0.5 * loss + penalty_1 + 0.00001 * l1_reg
-                
-                loss = loss.mean()
-                loss.backward()
->>>>>>> e2126d572fe3fd096e14f36fc038f7141668dfe2
                 optimizer.step()
-
-                # Accumulate losses
                 train_loss += total_loss.item()
-                epoch_dgi_loss += dgi_loss.item()
-                epoch_l1_loss += l1_loss.item()
-                epoch_spatial_loss += spatial_loss.item()
 
-            # Step the scheduler
             scheduler.step()
-<<<<<<< HEAD
 
-            # Early stopping logic
             if train_loss < best_metric:
                 best_metric = train_loss
                 patience_counter = 0
                 best_params = self.model.state_dict()
-                print("Model improved and parameters saved.")
             else:
                 patience_counter += 1
                 if patience_counter >= self.patience:
                     print("Early stopping triggered.")
                     break
 
-            # Append epoch losses for plotting
-            dgi_loss_list.append(epoch_dgi_loss)
-            l1_loss_list.append(epoch_l1_loss)
-            spatial_loss_list.append(epoch_spatial_loss)
-            total_loss_list.append(train_loss)
-
-            # Log the losses at the end of each epoch
-            print(f"Epoch [{epoch+1}/{self.epochs}] Completed. "
-                  f"Epoch Losses: DGI Loss = {epoch_dgi_loss:.4f}, "
-                  f"Spatial Loss = {epoch_spatial_loss:.4f}, "
-                  f"L1 Loss = {epoch_l1_loss:.6f}, "
-                  f"Total Loss = {train_loss:.4f}")
-
-        # Load the best model parameters
         self.model.load_state_dict(best_params)
 
-        # Plot the loss trends over epochs
-        epochs_range = range(1, len(dgi_loss_list) + 1)
-
-        plt.figure(figsize=(10, 6))
-        plt.plot(epochs_range, dgi_loss_list, label='DGI Loss', marker='o')
-        plt.plot(epochs_range, spatial_loss_list, label='Spatial Loss', marker='o')
-        plt.plot(epochs_range, l1_loss_list, label='L1 Loss', marker='o')
-        plt.plot(epochs_range, total_loss_list, label='Total Loss', marker='o')
-
-        plt.title('Loss Trends Over Epochs')
-        plt.xlabel('Epoch')
-        plt.ylabel('Loss Value')
-        plt.legend()
-        plt.show()
-
-      
     def compute_spatial_loss(self, z, coords, subset_percent=0.2):
-        # Compute spatial loss to enforce spatial awareness
         edge_subset_sz = int(subset_percent * z.shape[0])
 
         cell_random_subset_1 = torch.randint(0, z.size(0), (edge_subset_sz,)).to(self.device)
         cell_random_subset_2 = torch.randint(0, z.size(0), (edge_subset_sz,)).to(self.device)
 
-        z1 = z[cell_random_subset_1]
-        z2 = z[cell_random_subset_2]
-        c1 = coords[cell_random_subset_1]
-        c2 = coords[cell_random_subset_2]
+        z1, z2 = z[cell_random_subset_1], z[cell_random_subset_2]
+        c1, c2 = coords[cell_random_subset_1], coords[cell_random_subset_2]
 
-        z_dists = torch.norm(z1 - z2, dim=1)
-        z_dists = z_dists / (torch.max(z_dists) + 1e-8)
+        z_dists = torch.norm(z1 - z2, dim=1) / (torch.max(torch.norm(z1 - z2, dim=1)) + 1e-8)
+        sp_dists = torch.norm(c1 - c2, dim=1) / (torch.max(torch.norm(c1 - c2, dim=1)) + 1e-8)
 
-        sp_dists = torch.norm(c1 - c2, dim=1)
-        sp_dists = sp_dists / (torch.max(sp_dists) + 1e-8)
-
-        n_items = z_dists.size(0)
-        # Revised spatial loss computation
-        # spatial_loss = torch.sum((sp_dists - z_dists) ** 2) / n_items
-        
-        # spatial_loss = torch.sum(sp_dists * z_dists) / n_items
-        
-        #0.35 
-        spatial_loss = torch.div(torch.sum(torch.mul(1.0 - z_dists, sp_dists)), n_items).to(self.device)
-
-
-
+        spatial_loss = torch.sum((1.0 - z_dists) * sp_dists) / len(z_dists)
         return spatial_loss
 
     def run_gat(self):
         print("Starting GAT run...")
-
         data_list = create_data_objects(self.adata, self.sample_key, self.radius)
-
-=======
-<<<<<<< HEAD
-    
-=======
-
->>>>>>> 84a829e9d3709a5972eadb8c43d4608919d42752
-            if epoch % 1 == 0:
-                print(f"Epoch {epoch}/{self.epochs}, Loss: {train_loss}")
-        
-        self.model.load_state_dict(best_params)
-        
-        return
-
-    def run_gat(self):
-        data_list = create_data_objects(self.adata, self.sample_key, self.radius)
-<<<<<<< HEAD
-=======
-        for graph in data_list:
-            plot_graph(graph)
->>>>>>> 84a829e9d3709a5972eadb8c43d4608919d42752
->>>>>>> e2126d572fe3fd096e14f36fc038f7141668dfe2
         dataloader = DataLoader(data_list, batch_size=1, shuffle=True)
-    
+
         self.train(dataloader)
-<<<<<<< HEAD
 
         embedding_adata = self.generate_embedding_adata(dataloader)
-
         print("GAT run completed.")
         return embedding_adata
-
+        
     def generate_embedding_adata(self, dataloader):
-=======
-    
-        #generate an embedding_adata
-        self.generate_embedding_adata(dataloader)
-
-        return
-
-<<<<<<< HEAD
-    def generate_embeddings_with_ids(self, dataloader):
-        self.model.eval()
-        embeddings, cell_ids, self_attn_weights1, self_attn_weights2, attn_weights1, attn_weights2, neighbor_indices = [], [], [], [], [], [], []
-        
-        max_neighbors = 0
-        
-        for batch in dataloader:
-            batch = batch.to(self.device)
-            with torch.no_grad():
-                z = self.model.encoder(batch.x, batch.edge_index)
-                _, _, attn1, attn2, neighbors = self.model.encoder.get_attention_info()
-    
-                max_neighbors = max(max_neighbors, max(len(n) for n in neighbors))  
-        for batch in dataloader:
-            batch = batch.to(self.device)
-            with torch.no_grad():
-                z = self.model.encoder(batch.x, batch.edge_index)
-                embeddings.append(z.cpu().numpy())
-                cell_ids.extend(batch.cell_ids)
-                self_attn1, self_attn2, attn1, attn2, neighbors = self.model.encoder.get_attention_info()
-    
-                
-                padded_attn1 = np.zeros((len(attn1), max_neighbors, attn1.shape[-1]))
-                padded_attn2 = np.zeros((len(attn2), max_neighbors, attn2.shape[-1]))
-    
-                for i, attn in enumerate(attn1):
-                    padded_attn1[i, :attn.shape[0], :] = attn
-                for i, attn in enumerate(attn2):
-                    padded_attn2[i, :attn.shape[0], :] = attn
-                self_attn_weights1.append(self_attn1.cpu().numpy())
-                self_attn_weights2.append(self_attn2.cpu().numpy())
-                attn_weights1.append(padded_attn1)
-                attn_weights2.append(padded_attn2)
-    
-                neighbors_tensor = torch.nn.utils.rnn.pad_sequence(
-                    [torch.tensor(n, dtype=torch.long, device=self.device) for n in neighbors], 
-                    batch_first=True, padding_value=-1
-                )
-                neighbor_indices.append(neighbors_tensor.cpu().numpy())
-        
-        embeddings = np.concatenate(embeddings, axis=0)
-        self_attn_weights1 = np.concatenate(self_attn_weights1, axis=0)
-        self_attn_weights2 = np.concatenate(self_attn_weights2, axis=0)
-        attn_weights1 = np.concatenate(attn_weights1, axis=0)
-        attn_weights2 = np.concatenate(attn_weights2, axis=0)
-        neighbor_indices = np.concatenate(neighbor_indices, axis=0)
-        
-        return embeddings, cell_ids, self_attn_weights1, self_attn_weights2, attn_weights1, attn_weights2, neighbor_indices
-
->>>>>>> e2126d572fe3fd096e14f36fc038f7141668dfe2
-
+        """
+        Generate an embedding AnnData object with attention information and reduction matrix.
+        """
         self.model.eval()
         embeddings = []
         cell_ids = []
-<<<<<<< HEAD
-        self_attn_w1_list = []
-        self_attn_w2_list = []
-        neighbor_attn_w1_list = []
-        neighbor_attn_w2_list = []
-        neighbor_indices_list = []
-        reduction_layer_list = []
+        self_attn_weights1 = []
+        self_attn_weights2 = []
+        neighbor_attn_weights1 = []
+        neighbor_attn_weights2 = []
+        neighbor_indices = []
+        reduction_matrix = None
     
         for batch in dataloader:
             batch = batch.to(self.device)
             with torch.no_grad():
-                # Use the encoder directly to get embeddings
-                pos_z = self.model.encoder(batch.x, batch.edge_index, batch.pos)
-                embeddings.append(pos_z.cpu().numpy())
-                cell_ids.extend(batch.cell_id)
+                # Use the encoder to generate embeddings
+                z = self.model.encoder(batch.x, batch.edge_index, batch.pos)
+                embeddings.append(z.cpu().numpy())
+                cell_ids.extend(batch.cell_ids)  # Assuming `cell_ids` exist in batch
     
-                # Get attention weights
-                (self_attn_w1, self_attn_w2, 
-                 neighbor_attn_w1, neighbor_attn_w2, 
-                 neighbor_indices, reduction_layer) = self.model.encoder.get_attention_info()
+                # Extract attention weights, neighbor indices, and reduction matrix
+                (
+                    self_attn1,
+                    self_attn2,
+                    neighbor_attn1,
+                    neighbor_attn2,
+                    neighbors,
+                    reduction_layer,
+                ) = self.model.encoder.get_attention_info()
     
-                self_attn_w1_list.append(self_attn_w1.cpu().numpy())
-                self_attn_w2_list.append(self_attn_w2.cpu().numpy())
-                neighbor_attn_w1_list.append(neighbor_attn_w1.cpu().numpy())
-                neighbor_attn_w2_list.append(neighbor_attn_w2.cpu().numpy())
-
-                reduction_layer_list.append(reduction_layer.cpu())
-                neighbor_indices_list.extend(neighbor_indices)
+                # Save attention weights and neighbor indices
+                self_attn_weights1.append(self_attn1.cpu().numpy())
+                self_attn_weights2.append(self_attn2.cpu().numpy())
+                neighbor_attn_weights1.append(
+                    [attn.cpu().numpy() for attn in neighbor_attn1]
+                )
+                neighbor_attn_weights2.append(
+                    [attn.cpu().numpy() for attn in neighbor_attn2]
+                )
+                neighbor_indices.append(
+                    [torch.tensor(neigh, dtype=torch.long).cpu().numpy() for neigh in neighbors]
+                )
     
+                # Save the reduction matrix
+                if reduction_matrix is None:
+                    reduction_matrix = reduction_layer.weight.cpu().detach().numpy()
+    
+        # Concatenate embeddings
         embeddings = np.concatenate(embeddings, axis=0)
-        self_attn_w1 = np.concatenate(self_attn_w1_list, axis=0)
-        self_attn_w2 = np.concatenate(self_attn_w2_list, axis=0)
     
-        # Since neighbor attention weights and indices have variable lengths, store them as lists
-        neighbor_attention = {
-            'layer1': neighbor_attn_w1_list,
-            'layer2': neighbor_attn_w2_list,
-            'indices': neighbor_indices_list
+        # Create AnnData object
+        embedding_adata = anndata.AnnData(embeddings, obs=self.adata.obs.copy())
+        embedding_adata.obs.index = cell_ids  # Align with cell IDs
+    
+        # Save attention weights into `obsm`
+        embedding_adata.obsm["self_attention_weights_layer1"] = np.concatenate(
+            self_attn_weights1, axis=0
+        )
+        embedding_adata.obsm["self_attention_weights_layer2"] = np.concatenate(
+            self_attn_weights2, axis=0
+        )
+    
+        # Save neighbor attention weights and indices into `uns`
+        embedding_adata.uns["neighbor_attention"] = {
+            "layer1": neighbor_attn_weights1,
+            "layer2": neighbor_attn_weights2,
+            "indices": neighbor_indices,
         }
     
-        # reduction_layes = np.concatenate(reduction_layer_list, axis=0)
-        embedding_adata = anndata.AnnData(embeddings, obs=self.adata.obs.copy())
-        embedding_adata.obsm['self_attention_weights_layer1'] = self_attn_w1
-        embedding_adata.obsm['self_attention_weights_layer2'] = self_attn_w2
+        # Save reduction matrix into `uns`
+        embedding_adata.uns["reduction_matrix"] = reduction_matrix
     
-       
-        embedding_adata.uns['neighbor_attention'] = neighbor_attention
-        embedding_adata.uns['reduction_layes'] = reduction_layer_list
-    
-    
+        # Save embedding_adata to the class
         self.embedding_adata = embedding_adata
-    
         return embedding_adata
-    
-=======
-=======
-    def generate_embedding_adata(self, dataloader):
-        '''Creates and saves the embedding adata object and attention weights.'''
-        self.model.eval()  
-        
-        embeddings, cell_ids, self_attn_weights, neighbor_attn_weights, reduction_attn_weights, neighbor_indices = [], [], [], [], [], []
-        max_neighbors = 0
->>>>>>> 84a829e9d3709a5972eadb8c43d4608919d42752
-        for batch in dataloader:
-            batch = batch.to(self.device)
-            with torch.no_grad():
-                z = self.model.encoder(batch.x, batch.edge_index)
-                embeddings.append(z.cpu().numpy())
-                cell_ids.extend(batch.cell_ids)
-
-                # Retrieve and detach attention-related outputs
-                self_attn, neighbor_attn, reduction_attn, neighbors = self.model.encoder.get_attention_info()
-
-                self_attn_weights.append(self_attn.detach().cpu().numpy())
-                neighbor_attn_weights.append(neighbor_attn.detach().cpu().numpy())
-                reduction_attn_weights.append(reduction_attn.detach().cpu().numpy())
-                neighbors_tensor = torch.nn.utils.rnn.pad_sequence([torch.tensor(n, dtype=torch.long, device=self.device) for n in neighbors], batch_first=True, padding_value=-1)
-                neighbor_indices.append(neighbors_tensor.cpu().numpy())
-
-        embeddings = np.concatenate(embeddings, axis=0)
-        self_attn_weights = np.concatenate(self_attn_weights, axis=0)
-        neighbor_attn_weights = np.concatenate(neighbor_attn_weights, axis=0)
-        reduction_attn_weights = np.concatenate(reduction_attn_weights, axis=0)
-        neighbor_indices = np.concatenate(neighbor_indices, axis=0)
-            # Create an AnnData object for embeddings
-        embedding_adata = anndata.AnnData(embeddings)
-        embedding_adata.obs.index = cell_ids
-        embedding_adata.obs = self.adata.obs
-       
-        self.embedding_adata = embedding_adata
-        self.self_attn_weights = self_attn_weights
-        self.neighbor_attn_weights = neighbor_attn_weights
-        self.reduction_attn_weights = reduction_attn_weights
-        self.neighbor_indices = neighbor_indices
-
-        return embedding_adata
->>>>>>> e2126d572fe3fd096e14f36fc038f7141668dfe2

@@ -4,26 +4,11 @@ import matplotlib.lines as mlines
 from matplotlib import colors as mcolors
 import networkx as nx
 from torch_geometric.utils import to_networkx
-<<<<<<< HEAD
 from matplotlib.patches import Circle
 import random
 
 def plot_continous_obs(adata, continuous_obs_name, X_key="X", Y_key="Y", size=1, figure_size=(10, 8), save_path=None):
-=======
 
-def plot_continous_obs(adata, continuous_obs_name, X_key="X", Y_key="Y", size=1, save_path=None):
->>>>>>> e2126d572fe3fd096e14f36fc038f7141668dfe2
-    '''
-    Plot a continuous observation from the adata object.
-
-    Args:
-        adata: AnnData object
-        continuous_obs_name: Name of the continuous observation in `adata.obs` to plot.
-        X_key: Key for X-coordinate values in `adata.obs`
-        Y_key: Key for Y-coordinate values in `adata.obs`
-        size: Size of the scatter plot points
-        save_path: Path to save the plot (optional). If None, displays the plot.
-    '''
     plt.figure(figsize=figure_size, dpi=300)
     ax = plt.gca()
 
@@ -155,20 +140,6 @@ def plot_expression(adata, gene, x_coord='X', y_coord='Y', figure_size=(12, 8)):
     plt.show()
     return
 
-def plot_graph(graph, node_color='blue', edge_color='gray', node_size=50, figsize=(10, 10)):
-    """
-    Visualize the graph with nodes and edges using networkx and matplotlib.
-
-    Plot using network graphing functions to show how inner connected the network is - so nodes and edges as defined in the constructor of the plastinet class
-
-    should only be a couple lines 
-
-    Eventually want to modify this to show the line weight based on the distance decay - in the attention.py file there is a defined alpha and expoential decay so the line weight representing that is goal eventually so user can pick appropiate values 
-    
-    """ 
-    #TODO 
-    return 
-<<<<<<< HEAD
 
 def plot_subsample_radius(adata, x_samples=10, radius=50, x_key='X', y_key='Y'):
 
@@ -207,5 +178,3 @@ def plot_subsample_radius(adata, x_samples=10, radius=50, x_key='X', y_key='Y'):
 
     plt.tight_layout()
     plt.show()
-=======
->>>>>>> e2126d572fe3fd096e14f36fc038f7141668dfe2
