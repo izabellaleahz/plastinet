@@ -3,10 +3,7 @@ lib/
 node_modules/
 *.egg-info/
 **/.ipynb_checkpoints
-<<<<<<< HEAD
-=======
 .ipynb_checkpoints
->>>>>>> e2126d572fe3fd096e14f36fc038f7141668dfe2
 *.tsbuildinfo
 
 # Created by https://www.gitignore.io/api/python
@@ -15,10 +12,7 @@ node_modules/
 ### Python ###
 # Byte-compiled / optimized / DLL files
 **/__pycache__/
-<<<<<<< HEAD
-=======
 __pycache__/
->>>>>>> e2126d572fe3fd096e14f36fc038f7141668dfe2
 *.py[cod]
 *$py.class
 
