@@ -147,12 +147,10 @@ def plot_composition_dotplot(adata, celltype_col='celltype', leiden_col='leiden'
         value_name='Proportion'
     )
     
-    # Create a palette for each cell type
     cell_types = composition_long['Cell Type'].unique()
     palette = sns.color_palette('tab10', len(cell_types))  
     color_map = dict(zip(cell_types, palette))  
     
-    # Plot the dot plot
     plt.figure(figsize=(12, 8))
     sns.scatterplot(
         data=composition_long,
