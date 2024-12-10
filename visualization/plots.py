@@ -4,10 +4,15 @@ import matplotlib.lines as mlines
 from matplotlib import colors as mcolors
 import networkx as nx
 from torch_geometric.utils import to_networkx
+<<<<<<< HEAD
 from matplotlib.patches import Circle
 import random
 
 def plot_continous_obs(adata, continuous_obs_name, X_key="X", Y_key="Y", size=1, figure_size=(10, 8), save_path=None):
+=======
+
+def plot_continous_obs(adata, continuous_obs_name, X_key="X", Y_key="Y", size=1, save_path=None):
+>>>>>>> e2126d572fe3fd096e14f36fc038f7141668dfe2
     '''
     Plot a continuous observation from the adata object.
 
@@ -163,6 +168,7 @@ def plot_graph(graph, node_color='blue', edge_color='gray', node_size=50, figsiz
     """ 
     #TODO 
     return 
+<<<<<<< HEAD
 
 def plot_subsample_radius(adata, x_samples=10, radius=50, x_key='X', y_key='Y'):
 
@@ -201,3 +207,5 @@ def plot_subsample_radius(adata, x_samples=10, radius=50, x_key='X', y_key='Y'):
 
     plt.tight_layout()
     plt.show()
+=======
+>>>>>>> e2126d572fe3fd096e14f36fc038f7141668dfe2
