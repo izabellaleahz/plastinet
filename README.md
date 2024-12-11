@@ -18,11 +18,11 @@ Custom GAT Architecture:
 - Incorporates self-attention (intrinsic features) and neighbor-attention (extrinsic influences).
 - Applies distance-weighted attention to prioritize nearby neighbors.
 - Produces spatially aware embeddings via learned reduction layers.
-** Loss Function:**
+**Loss Function:**
 - Spatial Regularization: Preserves spatial relationships in the embedding space.
 - L1 Regularization: Promotes sparsity to enhance interpretability and feature selection.
 - Deep Graph Infomax (DGI): Ensures high-quality node embeddings by contrasting real and corrupted graph data.
-** Downstream Analysis:**
+**Downstream Analysis:**
 - Clustering of cells into spatial neighborhoods.
 - Pseudotime trajectory construction to track plasticity transitions.
 - Attention weight analysis to identify key cell-cell interactions.
