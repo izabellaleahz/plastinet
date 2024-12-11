@@ -18,6 +18,9 @@ PlastiNet has been validated on multiple datasets, including colon and brain and
 - Identify plasticity spectra and key signaling axes
 - Propose actionable hypotheses and therapeutic targets.
 
+![PlastiNetv2 Overview Schematic](https://github.com/user-attachments/assets/b569fcd8-e968-418f-a30e-42d0278fb4ce)
+
+
 ## Key Features
 
 **Spatial Graph Construction:** Nodes represent cells, and edges connect cells within a predefined spatial radius, capturing local neighborhood interactions.
