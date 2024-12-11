@@ -3,21 +3,18 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
-  - numpy
-  - pandas
-  - pip
   - python=3.10
+  - numpy=1.22
+  - pandas
   - scikit-learn
-  - torchvision
-  - ipykernel
-  # - cpuonly
-  # - torchaudio
-  - matplotlib
-  - anndata
-  - squidpy
-  - gudhi
+  - matplotlib=3.5
   - scanpy=1.9.8
+  - squidpy=1.2
+  - gudhi
   - cmcrameri
+  - torchvision=0.13.1
+  - anndata
+  - pip
   - pip:
       - torch-geometric
 
