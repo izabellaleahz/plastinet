@@ -5,10 +5,7 @@
 **Package Authors**
 Izabella Zamora and Lucy Zhang
 
-**Paper Authors**
-
-The development of PlastiNet was part of the study published as:
-PlastiNet: Understanding the Epithelial-Mesenchymal Transition Through Graph Attention in Spatial Transcriptomics
+The development of PlastiNet was part of the study published as: **PlastiNet: Understanding the Epithelial-Mesenchymal Transition Through Graph Attention in Spatial Transcriptomics**
 Izabella Zamora, Lynn Bi, Milan Parikh, Abigail Collins, Samuel Wright, Bidish K. Patel, Martin Hemberg, William L. Hwang, Aziz Al’Khafaji, David Ting, Arnav Mehta, Nir Hacohen
 
 ## Overview
