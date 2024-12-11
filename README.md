@@ -16,6 +16,10 @@ PlastiNet is a Python package for [briefly describe what your package does, e.g.
 
 Open the [tutorial_on_ex_data.ipynb](https://github.com/izabellaleahz/plastinet/blob/main/notebooks/tutorial_on_ex_data.ipynb) and run.
 
+## Publishing
+
+TODO: Lucy to add to this section
+
 ## Contributing
 
 Contributions are welcome! Feel free to submit a pull request or open an issue for bug reports and feature requests.
