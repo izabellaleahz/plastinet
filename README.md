@@ -1,4 +1,4 @@
-#  PlastiNet
+# PlastiNet
 
 ## Authors
 
@@ -20,21 +20,23 @@ PlastiNet has been validated on multiple datasets, including colon and brain and
 
 ![PlastiNetv2 Overview Schematic](https://github.com/user-attachments/assets/b569fcd8-e968-418f-a30e-42d0278fb4ce)
 
-
 ## Key Features
 
 **Spatial Graph Construction:** Nodes represent cells, and edges connect cells within a predefined spatial radius, capturing local neighborhood interactions.
 Custom GAT Architecture:
+
 - Incorporates self-attention (intrinsic features) and neighbor-attention (extrinsic influences).
 - Applies distance-weighted attention to prioritize nearby neighbors.
 - Produces spatially aware embeddings via learned reduction layers.
 
 **Loss Function:**
+
 - Spatial Regularization: Preserves spatial relationships in the embedding space.
 - L1 Regularization: Promotes sparsity to enhance interpretability and feature selection.
 - Deep Graph Infomax (DGI): Ensures high-quality node embeddings by contrasting real and corrupted graph data.
 
 **Downstream Analysis:**
+
 - Clustering of cells into spatial neighborhoods.
 - Pseudotime trajectory construction to track plasticity transitions.
 - Attention weight analysis to identify key cell-cell interactions.
@@ -48,17 +50,21 @@ Custom GAT Architecture:
 
 ## Usage
 
-Open the [tutorial_on_ex_data.ipynb](https://github.com/izabellaleahz/plastinet/blob/main/notebooks/tutorial_on_ex_data.ipynb) and run.
+To run the package locally, open the [tutorial_on_ex_data.ipynb](https://github.com/izabellaleahz/plastinet/blob/main/notebooks/tutorial_on_ex_data.ipynb) and run. Make sure the plastiNet kernel is selected:
+![Screenshot of Jupyter kernel with plastiNet environment selected](jupyter_kernel.png)
+
+Also, make sure to change the `root_dir` variable value to the exact path where your plastinet repo lives.
 
 ## Publishing
 
 TODO: Lucy to add to this section
 
 ## Citation
+
 If you use PlastiNet in your research, please cite:
 
 PlastiNet: Understanding the Epithelial-Mesenchymal Transition Through Graph Attention in Spatial Transcriptomics
-Izabella Zamora, et al. (2024). 
+Izabella Zamora, et al. (2024).
 
 ## Contributing
 
@@ -70,6 +76,4 @@ This project is licensed under the [MIT License](https://opensource.org/license/
 
 ## Contact
 
-For questions or support, please contact
-
-zamora@broadinstitute.org 
+For questions or support, please contact zamora@broadinstitute.org

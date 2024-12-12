@@ -4,17 +4,19 @@ channels:
   - bioconda
 dependencies:
   - python=3.10
-  - numpy=1.22
+  - numpy
   - pandas
   - scikit-learn
-  - matplotlib=3.5
-  - scanpy=1.9.8
-  - squidpy=1.2
+  - matplotlib
+  - scanpy
+  - squidpy
   - gudhi
   - cmcrameri
-  - torchvision=0.13.1
+  - torchvision
   - anndata
+  - pygam
   - pip
+  - ipykernel
   - pip:
       - torch-geometric
 
