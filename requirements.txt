@@ -1,0 +1,12 @@
+numpy
+pandas
+scikit-learn
+matplotlib
+scanpy
+squidpy
+gudhi
+cmcrameri
+torchvision
+anndata
+pygam
+torch-geometric
