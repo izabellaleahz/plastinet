@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="plastinet",
-    version="v0.1.2",
+    version="v0.1.4",
     description="Plastinet is Python package for spatial transcriptomics.",
     author="Izabella Zamora",
     author_email="zamora@broadinstitute.org",
@@ -18,5 +18,5 @@ setup(
         "gudhi",
         "cmcrameri",
     ],
-    python_requires=">=3.8",
+    python_requires=">=3.10",
 )
