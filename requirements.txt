@@ -6,7 +6,8 @@ scanpy
 squidpy
 gudhi
 cmcrameri
+torch
 torchvision
 anndata
 pygam
-torch-geometric
+torch_geometric

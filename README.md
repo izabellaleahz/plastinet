@@ -41,10 +41,25 @@ Custom GAT Architecture:
 - Pseudotime trajectory construction to track plasticity transitions.
 - Attention weight analysis to identify key cell-cell interactions.
 
+## Installation
+
+Plastinet can be installed `pip install plastinet`.
+
+**Troubleshooting**
+
+- This package depends on `pyproj`, which requires the PROJ library. Install the PROJ library:
+
+* **Ubuntu/Debian**: `sudo apt-get install libproj-dev proj-data proj-bin`
+* **macOS**: `brew install proj`
+* **Windows**: `conda install -c conda-forge proj`
+
 ## Requirements
 
-1. Download [Anaconda](https://anaconda.org/)
-2. Create an environment from deps: `conda env create --name plastiNet --file=environment.yaml`
+Instructions for running the code locally:
+
+1. Download [Anaconda](https://anaconda.org/).
+
+2. Create an environment from dependencies: `conda env create --name plastiNet --file=environment.yaml`
 3. `conda activate plastiNet`
 4. [Optional]: To use in Jupyter Notebook, add environment to ipykernel instance: `python -m ipykernel install --user --name=plastiNet`
 
