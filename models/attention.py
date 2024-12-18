@@ -34,10 +34,6 @@ class SelfNeighborAttention(nn.Module):
         self_attn_weights = combined_weights[:, 0, :]
         neighbor_attn_weights = combined_weights[:, 1:, :]
 
-        # Clipping the attention 
-        # neighbor_attn_weights = torch.where(torch.abs(neighbor_attn_weights) >= self.attention_threshold, neighbor_attn_weights, torch.zeros_like(neighbor_attn_weights))
-        # self_attn_weights = torch.where(torch.abs(self_attn_weights) >= self.attention_threshold, self_attn_weights, torch.zeros_like(self_attn_weights))
-
         context_vector = self.beta * (self_attn_weights * target_cell) + (1 - self.beta) * torch.sum(neighbor_attn_weights * neighbors, dim=1)
     
         return context_vector, self_attn_weights, neighbor_attn_weights
@@ -92,7 +88,7 @@ class GraphAttentionEncoder(nn.Module):
 
         # x_reduced = self.ffn(x_agg2)
         
-        # x_reduced = F.leaky_relu(x_reduced, negative_slope=0.01)  # Optional non-linearity
+        # x_reduced = F.leaky_relu(x_reduced, negative_slope=0.01) 
         # x_reduced = F.dropout(x_reduced, p=self.dropout_rate, training=self.training)
 
         self.neighbor_indices = neighbor_indices  

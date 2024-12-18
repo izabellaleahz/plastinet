@@ -250,7 +250,6 @@ class PlastiNet:
         return embedding_adata
 
     def generate_embedding_adata(self, dataloader):
-
         self.model.eval()
         embeddings = []
         cell_ids = []
@@ -264,46 +263,57 @@ class PlastiNet:
         for batch in dataloader:
             batch = batch.to(self.device)
             with torch.no_grad():
-                # Use the encoder directly to get embeddings
+                
                 pos_z = self.model.encoder(batch.x, batch.edge_index, batch.pos)
                 embeddings.append(pos_z.cpu().numpy())
                 cell_ids.extend(batch.cell_id)
     
-                # Get attention weights
                 (self_attn_w1, self_attn_w2, 
                  neighbor_attn_w1, neighbor_attn_w2, 
                  neighbor_indices, reduction_layer) = self.model.encoder.get_attention_info()
-    
+            
                 self_attn_w1_list.append(self_attn_w1.cpu().numpy())
                 self_attn_w2_list.append(self_attn_w2.cpu().numpy())
                 neighbor_attn_w1_list.append(neighbor_attn_w1.cpu().numpy())
                 neighbor_attn_w2_list.append(neighbor_attn_w2.cpu().numpy())
 
+                # neighbor_indices_list.extend(neighbor_indices)
+                # neighbor_indices_list.extend([indices.cpu().numpy() for indices in neighbor_indices])
+                neighbor_indices_list.extend([np.array(indices) for indices in neighbor_indices])
+
+
                 reduction_layer_list.append(reduction_layer.cpu())
-                neighbor_indices_list.extend(neighbor_indices)
-    
+                
         embeddings = np.concatenate(embeddings, axis=0)
         self_attn_w1 = np.concatenate(self_attn_w1_list, axis=0)
         self_attn_w2 = np.concatenate(self_attn_w2_list, axis=0)
     
-        # Since neighbor attention weights and indices have variable lengths, store them as lists
         neighbor_attention = {
             'layer1': neighbor_attn_w1_list,
             'layer2': neighbor_attn_w2_list,
-            'indices': neighbor_indices_list
+            'indices': [str(indices.tolist()) for indices in neighbor_indices_list]  # Convert to string
         }
+        # neighbor_attention['indices'] = [indices.tolist() for indices in neighbor_indices_list]
     
-        # reduction_layes = np.concatenate(reduction_layer_list, axis=0)
+      
+        reduction_layer = reduction_layer_list[0]
+
+        weights = reduction_layer.weight.detach().cpu().numpy()
+        biases = reduction_layer.bias.detach().cpu().numpy()
+    
+        combined_values_reduction = {
+            'weights': weights,
+            'biases': biases
+        }
+        
         embedding_adata = anndata.AnnData(embeddings, obs=self.adata.obs.copy())
         embedding_adata.obsm['self_attention_weights_layer1'] = self_attn_w1
         embedding_adata.obsm['self_attention_weights_layer2'] = self_attn_w2
-    
-       
+        
+        embedding_adata.uns['reduction_layes'] = combined_values_reduction
         embedding_adata.uns['neighbor_attention'] = neighbor_attention
-        embedding_adata.uns['reduction_layes'] = reduction_layer_list
-    
+
     
         self.embedding_adata = embedding_adata
     
         return embedding_adata
-    
