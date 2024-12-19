@@ -24,11 +24,14 @@ def construct_differentiation_path(embedding_adata, adata, cell_type_obs, cell_t
 
     # Compute pseudotime starting from top cells
     for idx, top_cell in enumerate(top_cells_indices, start=1):
-        sub_adata.uns['iroot'] = np.flatnonzero(sub_adata.obs_names == top_cell)[0]
+        sub_adata.uns['iroot'] = np.flatnonzero(sub_adata.obs_names == top_cell)[0]        
+        sc.pp.neighbors(sub_adata, use_rep='X')
+        sc.tl.diffmap(sub_adata)
         sc.tl.dpt(sub_adata, n_branchings=0)
 
         pseudotime_key = f'dpt_pseudotime_global_{idx}'
         pseudotime_df[pseudotime_key] = sub_adata.obs['dpt_pseudotime'].reindex(pseudotime_df.index)
+
 
     classical_keys = [f'dpt_pseudotime_global_{i}' for i in range(1, N + 1)]
     pseudotime_df['avg_start_pseudotime'] = pseudotime_df[classical_keys].mean(axis=1, skipna=True)
@@ -41,7 +44,12 @@ def construct_differentiation_path(embedding_adata, adata, cell_type_obs, cell_t
 
         for idx, top_cell in enumerate(top_negative_indices, start=1):
             sub_adata.uns['iroot'] = np.flatnonzero(sub_adata.obs_names == top_cell)[0]
+            
+            sc.pp.neighbors(sub_adata, use_rep='X')
+            sc.tl.diffmap(sub_adata)
+
             sc.tl.dpt(sub_adata, n_branchings=0)
+            
 
             max_pseudotime = sub_adata.obs['dpt_pseudotime'].max()
             inverted_pseudotime_key = f'inverted_dpt_pseudotime_global_{idx}'

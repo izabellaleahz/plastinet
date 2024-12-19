@@ -17,25 +17,47 @@ class SelfNeighborAttention(nn.Module):
         
         self._initialize_weights()
 
-    def forward(self, target_cell, neighbors, distances):
+    def forward(self, target_cell, neighbors, distances, neighbor_indices):
+        # Normalize
         target_cell = self.layer_norm(target_cell)
         neighbors = self.layer_norm(neighbors)
 
-        self_attn_scores = self.self_attn_layer(target_cell)
-        neighbor_attn_scores = self.neighbor_attn_layer(neighbors)
-    
+        # Compute attention scores
+        self_attn_scores = self.self_attn_layer(target_cell)  # [B, gene_dim]
+        neighbor_attn_scores = self.neighbor_attn_layer(neighbors)  # [B, N, gene_dim]
+
+        # Compute distance weights
         normalized_distances = distances / (self.radius + 1e-8)
-        distance_weights = torch.exp(-self.alpha * normalized_distances)
-        weighted_neighbor_scores = neighbor_attn_scores * distance_weights.unsqueeze(-1)
-    
-        combined_scores = torch.cat([self_attn_scores.unsqueeze(1), weighted_neighbor_scores], dim=1)
+        distance_weights = torch.exp(-self.alpha * normalized_distances)  # [B, N]
+        weighted_neighbor_scores = neighbor_attn_scores * distance_weights.unsqueeze(-1)  # [B, N, gene_dim]
+
+        # Combine self and neighbor scores
+        combined_scores = torch.cat([self_attn_scores.unsqueeze(1), weighted_neighbor_scores], dim=1)  # [B, 1+N, gene_dim]
+
+        # Create a mask for valid neighbors: True = valid, False = padded
+        valid_mask = (neighbor_indices != -1)  # [B, N]
+        # We need to account for self position as well. Self is always valid
+        # So we will create a mask that includes self at the front:
+        # Shape: [B, 1+N], first column is True for self, then valid_mask for neighbors
+        full_mask = torch.cat([torch.ones((neighbors.size(0), 1), dtype=torch.bool, device=neighbors.device), valid_mask], dim=1)
+
+        # Mask invalid entries before softmax
+        # Set masked positions to a large negative value so softmax ~0
+        combined_scores = combined_scores.masked_fill(~full_mask.unsqueeze(-1), float('-inf'))
+
+        # Apply softmax over neighbors dimension
         combined_weights = F.softmax(combined_scores, dim=1)
 
-        self_attn_weights = combined_weights[:, 0, :]
-        neighbor_attn_weights = combined_weights[:, 1:, :]
+        # Extract self and neighbor attention weights
+        self_attn_weights = combined_weights[:, 0, :]  # [B, gene_dim]
+        neighbor_attn_weights = combined_weights[:, 1:, :]  # [B, N, gene_dim]
 
-        context_vector = self.beta * (self_attn_weights * target_cell) + (1 - self.beta) * torch.sum(neighbor_attn_weights * neighbors, dim=1)
-    
+        # Compute context vector
+        # Weighted combination of self and neighbor features
+        # Only valid neighbors contribute due to the masking in weights
+        context_vector = self.beta * (self_attn_weights * target_cell) \
+                         + (1 - self.beta) * torch.sum(neighbor_attn_weights * neighbors, dim=1)
+
         return context_vector, self_attn_weights, neighbor_attn_weights
 
     def _initialize_weights(self):
@@ -76,22 +98,17 @@ class GraphAttentionEncoder(nn.Module):
         self.neighbor_indices = None
 
     def forward(self, x, edge_index, spatial_coords):
-        x_agg, padded_neighbors, distances, neighbor_indices = self.aggregate_features(x, edge_index, spatial_coords)
+        x_agg, padded_neighbors, distances, padded_indices = self.aggregate_features(x, edge_index, spatial_coords)
     
-        x_agg1, self.self_attention_weights1, self.neighbor_attention_weights1 = self.attention1(x_agg, padded_neighbors, distances)
+        x_agg1, self.self_attention_weights1, self.neighbor_attention_weights1 = self.attention1(x_agg, padded_neighbors, distances, padded_indices)
         x_agg1 = F.leaky_relu(x_agg1, negative_slope=0.01)
         
-        x_agg2, self.self_attention_weights2, self.neighbor_attention_weights2 = self.attention2(x_agg1, padded_neighbors, distances)
+        x_agg2, self.self_attention_weights2, self.neighbor_attention_weights2 = self.attention2(x_agg1, padded_neighbors, distances, padded_indices)
         x_agg2 = F.leaky_relu(x_agg2, negative_slope=0.01)
 
         x_reduced = self.reduction_matrix(x_agg2)
 
-        # x_reduced = self.ffn(x_agg2)
-        
-        # x_reduced = F.leaky_relu(x_reduced, negative_slope=0.01) 
-        # x_reduced = F.dropout(x_reduced, p=self.dropout_rate, training=self.training)
-
-        self.neighbor_indices = neighbor_indices  
+        self.neighbor_indices = padded_indices  
 
         return x_reduced  
         
@@ -112,28 +129,37 @@ class GraphAttentionEncoder(nn.Module):
 
             if node_neighbors.size(0) > 0:
                 aggregated = torch.sum(node_neighbors, dim=0)
-                neighbor_indices = col[row == node].tolist()  
+                n_indices = col[row == node].tolist()  
             else:
                 aggregated = torch.zeros(x.size(1), device=x.device)
-                neighbor_indices = []
+                n_indices = []
 
             aggregated_features.append(aggregated)
             neighbor_list.append(node_neighbors)
             distances_list.append(node_distances)
-            neighbor_indices_list.append(neighbor_indices)  
+            neighbor_indices_list.append(n_indices)  
 
         aggregated_features = torch.stack(aggregated_features)
         distances = torch.nn.utils.rnn.pad_sequence(distances_list, batch_first=True, padding_value=0.0)
 
         max_len = max(len(n) for n in neighbor_list)
         padded_neighbors = torch.zeros((x.size(0), max_len, x.size(1)), device=x.device)
+        padded_indices = torch.full((x.size(0), max_len), -1, dtype=torch.long, device=x.device)
+
         for i, n in enumerate(neighbor_list):
             padded_neighbors[i, :len(n), :] = n
+            if len(neighbor_indices_list[i]) > 0:
+                padded_indices[i, :len(neighbor_indices_list[i])] = torch.tensor(neighbor_indices_list[i], dtype=torch.long, device=x.device)
 
-        return aggregated_features, padded_neighbors, distances, neighbor_indices_list
+        return aggregated_features, padded_neighbors, distances, padded_indices
 
     def get_attention_info(self):
-        return self.self_attention_weights1, self.self_attention_weights2, self.neighbor_attention_weights1, self.neighbor_attention_weights2, self.neighbor_indices, self.reduction_matrix
+        return (self.self_attention_weights1,
+                self.self_attention_weights2,
+                self.neighbor_attention_weights1,
+                self.neighbor_attention_weights2,
+                self.neighbor_indices,
+                self.reduction_matrix)
 
     def _initialize_weights(self):
         for m in self.modules():
