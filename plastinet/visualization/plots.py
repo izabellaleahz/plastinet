@@ -14,7 +14,7 @@ def plot_continous_obs(adata, continuous_obs_name, X_key="X", Y_key="Y", size=1,
 
     continuous_obs_values = adata.obs[continuous_obs_name]
     continuous_obs_values = np.ravel(continuous_obs_values)
-    scatter = plt.scatter(adata.obs[X_key], adata.obs[Y_key], s=size, c=continuous_obs_values, cmap='RdGy_r')
+    scatter = plt.scatter(adata.obs[X_key], adata.obs[Y_key], s=size, c=continuous_obs_values, cmap='coolwarm')
 
     cbar = plt.colorbar(scatter)
     cbar.set_label(f'Value of {continuous_obs_name}')
@@ -32,8 +32,8 @@ def plot_continous_obs(adata, continuous_obs_name, X_key="X", Y_key="Y", size=1,
         plt.savefig(save_path)
     return
 
-
-def plot_tissue(adata, leiden_key, x_coord='X', y_coord='Y', size=1, tabTen=True, figure_size=(10, 8), save_path=None):
+def plot_tissue(adata, leiden_key, x_coord='X', y_coord='Y', size=1, tabTen=True,
+    figure_size=(10, 8), save_path=None, global_color_mapping=None):
     '''
     Plot the tissue clusters using Leiden clustering or other categorical obs.
 
@@ -46,6 +46,7 @@ def plot_tissue(adata, leiden_key, x_coord='X', y_coord='Y', size=1, tabTen=True
         tabTen: Boolean for whether to use the 'tab10' colormap (default). If False, uses 'tab20'.
         figure_size: Tuple for figure size
         save_path: Path to save the plot (optional). If None, displays the plot.
+        global_color_mapping: Predefined mapping of clusters to colors. If None, creates one.
     '''
     if leiden_key not in adata.obs:
         raise ValueError(f"{leiden_key} not found in adata.obs")
@@ -55,13 +56,19 @@ def plot_tissue(adata, leiden_key, x_coord='X', y_coord='Y', size=1, tabTen=True
     cmap = plt.get_cmap('tab10' if tabTen else 'tab20')
 
     unique_clusters = sorted(adata.obs[leiden_key].unique(), key=str)
-    color_mapping = {cluster: cmap(i % cmap.N) for i, cluster in enumerate(unique_clusters)}
 
+    if global_color_mapping is None:
+        global_unique_clusters = sorted(adata.obs[leiden_key].unique(), key=str)
+        global_color_mapping = {cluster: cmap(i % cmap.N) for i, cluster in enumerate(global_unique_clusters)}
+
+    # Plot each cluster
     legend_handles = []
     for cluster in unique_clusters:
         subset = adata[adata.obs[leiden_key] == cluster]
-        color = color_mapping[cluster]
-        scatter = plt.scatter(subset.obs[x_coord], subset.obs[y_coord], label=f'Cluster {cluster}', color=color, s=size)
+        color = global_color_mapping.get(cluster, "gray")  # Default to gray if cluster not in mapping
+        plt.scatter(
+            subset.obs[x_coord], subset.obs[y_coord], label=f'Cluster {cluster}', color=color, s=size
+        )
 
         legend_handle = mlines.Line2D([], [], color=color, marker='o', linestyle='None', markersize=10, label=f'Cluster {cluster}')
         legend_handles.append(legend_handle)
@@ -77,7 +84,6 @@ def plot_tissue(adata, leiden_key, x_coord='X', y_coord='Y', size=1, tabTen=True
     else:
         plt.savefig(save_path)
     return
-
 
 def plot_composition_dot_plot(adata, cluster_key, obs_key):
     '''
