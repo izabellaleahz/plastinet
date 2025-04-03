@@ -70,10 +70,6 @@ To run the package locally, open the [tutorial_on_ex_data.ipynb](https://github.
 
 Also, make sure to change the `root_dir` variable value to the exact path where your plastinet repo lives.
 
-## Publishing
-
-TODO: Lucy to add to this section
-
 ## Citation
 
 If you use PlastiNet in your research, please cite:
