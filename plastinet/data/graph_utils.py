@@ -21,9 +21,12 @@ def graph_alpha(spatial_locs, radius):
 
 def graph_to_sparse_matrix(G):
     n_nodes = G.number_of_nodes()
-    edges = np.array(G.edges()).T
-    data = np.ones(edges.shape[1])
-    sparse_matrix = coo_matrix((data, (edges[0], edges[1])), shape=(n_nodes, n_nodes), dtype=np.float32)
+    # G.edges() yields each undirected edge once, so add both directions to keep the adjacency symmetric
+    edges = np.array(G.edges(), dtype=np.int64).reshape(-1, 2)
+    row = np.concatenate([edges[:, 0], edges[:, 1]])
+    col = np.concatenate([edges[:, 1], edges[:, 0]])
+    data = np.ones(row.shape[0])
+    sparse_matrix = coo_matrix((data, (row, col)), shape=(n_nodes, n_nodes), dtype=np.float32)
     return sparse_matrix
 
 def sparse_mx_to_torch_edge_list(sparse_mx):

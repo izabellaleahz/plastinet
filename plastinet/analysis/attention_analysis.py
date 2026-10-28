@@ -46,10 +46,9 @@ def analyze_self_attention_layer(
     embedding_adata, adata, cell_type_col='subset', gene_list=None, normalize=True, layer = "1", top_n_genes=20
 ):
    
-    attention_weights = embedding_adata.obsm['self_attention_weights_layer' + layer]
-
-    # Drop NaN values in cell type column
+    # Drop NaN values in cell type column (before reading weights so row positions stay aligned)
     embedding_adata = embedding_adata[~embedding_adata.obs[cell_type_col].isna()].copy()
+    attention_weights = embedding_adata.obsm['self_attention_weights_layer' + layer]
     cell_types = embedding_adata.obs[cell_type_col].unique()
 
     # Handle gene selection
@@ -89,7 +88,7 @@ def analyze_self_attention_layer(
 
     # Apply Z-score normalization if specified
     if normalize:
-        attention_df = attention_df.apply(zscore, axis=1)
+        attention_df = attention_df.apply(zscore, axis=1, result_type="broadcast")
 
     # Visualization
     plt.figure(figsize=(12, 8))
@@ -101,12 +100,13 @@ def analyze_self_attention_layer(
     
 def analyze_attention_flow(
     embedding_adata, adata, cell_type_col='subset', gene_list=None, normalize=True):
+    embedding_adata = embedding_adata[~embedding_adata.obs[cell_type_col].isna()].copy()
+
     layer1_weights = embedding_adata.obsm['self_attention_weights_layer1']
     layer2_weights = embedding_adata.obsm['self_attention_weights_layer2']
 
     attention_flow = layer1_weights * layer2_weights
 
-    embedding_adata = embedding_adata[~embedding_adata.obs[cell_type_col].isna()].copy()
     cell_types = embedding_adata.obs[cell_type_col].unique()
 
     gene_list = [gene for gene in gene_list if gene in adata.var.index]
@@ -130,7 +130,7 @@ def analyze_attention_flow(
     attention_df = pd.DataFrame(mean_attention_flow, index=gene_list)
 
     if normalize:
-        attention_df = attention_df.apply(zscore, axis=1)
+        attention_df = attention_df.apply(zscore, axis=1, result_type="broadcast")
 
     plt.figure(figsize=(12, 8))
     sns.heatmap(attention_df, cmap='coolwarm', annot=False, fmt='.2f', linewidths=0.5)
@@ -148,8 +148,12 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy.stats import zscore
 def analyze_attention_flow_with_permutation(
-    embedding_adata, adata, cell_type_col='subset', gene_list=None, n_permutations=1000
+    embedding_adata, adata, cell_type_col='subset', gene_list=None, n_permutations=1000, random_seed=0
 ):
+    # Filter valid cells before reading weights so row positions stay aligned
+    embedding_adata = embedding_adata[~embedding_adata.obs[cell_type_col].isna()].copy()
+    cell_types = embedding_adata.obs[cell_type_col].unique()
+
     # Extract attention weights
     layer1_weights = embedding_adata.obsm['self_attention_weights_layer1']
     layer2_weights = embedding_adata.obsm['self_attention_weights_layer2']
@@ -157,12 +161,13 @@ def analyze_attention_flow_with_permutation(
     # Compute attention flow (element-wise multiplication)
     attention_flow = layer1_weights * layer2_weights
 
-    # Filter valid cells and genes
-    embedding_adata = embedding_adata[~embedding_adata.obs[cell_type_col].isna()].copy()
-    cell_types = embedding_adata.obs[cell_type_col].unique()
-
     gene_list = [gene for gene in gene_list if gene in adata.var.index]
     gene_indices = [adata.var.index.get_loc(gene) for gene in gene_list]
+
+    flow_genes = attention_flow[:, gene_indices]
+    overall_mean = flow_genes.mean(axis=0)
+    n_cells = flow_genes.shape[0]
+    rng = np.random.default_rng(random_seed)
 
     # Compute mean attention flow and p-values
     mean_attention_flow = {}
@@ -175,18 +180,19 @@ def analyze_attention_flow_with_permutation(
             print(f"No cells found for cell type {cell_type}. Skipping.")
             continue
 
-        mean_flow = attention_flow[cell_indices][:, gene_indices].mean(axis=0)
+        mean_flow = flow_genes[cell_indices].mean(axis=0)
         mean_attention_flow[cell_type] = mean_flow
 
-        permuted_means = []
-        for _ in range(n_permutations):
-            shuffled_indices = np.random.permutation(cell_indices)
-            permuted_mean = attention_flow[shuffled_indices][:, gene_indices].mean(axis=0)
-            permuted_means.append(permuted_mean)
-        permuted_means = np.array(permuted_means)
+        # Null: mean over a random set of the same size drawn from all cells (label permutation)
+        permuted_means = np.array([
+            flow_genes[rng.choice(n_cells, size=len(cell_indices), replace=False)].mean(axis=0)
+            for _ in range(n_permutations)
+        ])
 
-        # Calculate p-values
-        p_values[cell_type] = np.mean(np.abs(permuted_means) >= np.abs(mean_flow), axis=0)
+        # Two-sided p-value on the deviation from the all-cell mean, with the +1 correction
+        observed_dev = np.abs(mean_flow - overall_mean)
+        null_dev = np.abs(permuted_means - overall_mean)
+        p_values[cell_type] = (1 + np.sum(null_dev >= observed_dev, axis=0)) / (1 + n_permutations)
 
     attention_df = pd.DataFrame(mean_attention_flow, index=gene_list)
     pval_df = pd.DataFrame(p_values, index=gene_list)
@@ -245,28 +251,30 @@ def analyze_stromal_to_epi_attention(
     Returns:
     - DataFrame summarizing neighbor attention across pseudotime.
     """
-    # Extract neighbor attention weights and indices
-    neighbor_attention_layer1 = embedding_adata.uns["neighbor_attention"]["layer1"]
-    neighbor_indices = embedding_adata.uns["neighbor_attention"]["indices"]
+    # Neighbor attention edge list: attention that cell `target` pays to neighbor `source` (row positions)
+    neighbor_attention = embedding_adata.uns["neighbor_attention"]
+    targets = np.asarray(neighbor_attention["target"])
+    sources = np.asarray(neighbor_attention["source"])
+    attention_layer1 = np.asarray(neighbor_attention["layer1"])
 
-    # Get cell indices for source and target types
-    source_indices = embedding_adata.obs[cell_type_col] == source_type
-    target_indices = embedding_adata.obs[cell_type_col] == target_type
+    if targets.size and max(targets.max(), sources.max()) >= embedding_adata.n_obs:
+        raise ValueError("Neighbor attention indices do not match embedding_adata; pass the unsubsetted embedding_adata.")
 
-    if not np.any(source_indices):
+    cell_types = embedding_adata.obs[cell_type_col].to_numpy()
+    if not np.any(cell_types == source_type):
         raise ValueError(f"No cells found for source type: {source_type}")
-    if not np.any(target_indices):
+    if not np.any(cell_types == target_type):
         raise ValueError(f"No cells found for target type: {target_type}")
 
-    # Extract pseudotime and sort target cells by pseudotime
-    pseudotime = embedding_adata.obs.loc[target_indices, pseudotime_key]
-    sorted_target_indices = pseudotime.sort_values().index
+    # Edges from a source-type neighbor into a target-type cell
+    edge_mask = (cell_types[targets] == target_type) & (cell_types[sources] == source_type)
+    if not np.any(edge_mask):
+        raise ValueError(f"No {target_type} cells have {source_type} neighbors.")
 
     # Handle gene selection
     if gene_list is None:
         # Compute variance of attention weights across all genes
-        attention_matrix = np.vstack(neighbor_attention_layer1)
-        gene_variances = attention_matrix.var(axis=0)
+        gene_variances = attention_layer1[edge_mask].var(axis=0)
         top_gene_indices = np.argsort(gene_variances)[-top_n_genes:]  # Select top N genes by variance
         gene_list = [adata.var.index[i] for i in top_gene_indices]
     else:
@@ -278,31 +286,22 @@ def analyze_stromal_to_epi_attention(
     # Map gene list to indices
     gene_indices = [adata.var.index.get_loc(gene) for gene in gene_list]
 
-    attention_values = []
-    for target_idx in sorted_target_indices:
-        # Map string index to integer index
-        int_idx = embedding_adata.obs.index.get_loc(target_idx)
+    # Mean attention to source-type neighbors per target cell; cells without such neighbors are left out
+    edge_df = pd.DataFrame(attention_layer1[edge_mask][:, gene_indices], columns=gene_list)
+    edge_df["target"] = targets[edge_mask]
+    per_cell = edge_df.groupby("target").mean()
 
-        # Check if index is valid
-        if int_idx >= len(neighbor_attention_layer1) or int_idx >= len(neighbor_indices):
-            print(f"Skipping invalid int_idx: {int_idx}")
-            continue
+    pseudotime = pd.to_numeric(embedding_adata.obs[pseudotime_key], errors="coerce").to_numpy()[per_cell.index]
+    has_pseudotime = ~np.isnan(pseudotime)
+    per_cell, pseudotime = per_cell[has_pseudotime], pseudotime[has_pseudotime]
+    order = np.argsort(pseudotime, kind="stable")
 
-        # Access neighbor indices and attention weights
-        neighbor_idx = neighbor_indices[int_idx]
-        attention_weights = neighbor_attention_layer1[int_idx]
-
-        # Filter for source cells
-        source_neighbors = np.isin(neighbor_idx, source_indices[source_indices].index)
-        if np.any(source_neighbors):
-            filtered_attention = attention_weights[source_neighbors, :]
-            attention_values.append(filtered_attention.mean(axis=0))
-        else:
-            attention_values.append(np.zeros(len(gene_list)))
+    n_target = int(np.sum(cell_types == target_type))
+    print(f"{len(per_cell)} of {n_target} {target_type} cells have {source_type} neighbors and a pseudotime value.")
 
     # Convert to DataFrame
     attention_df = pd.DataFrame(
-        attention_values, columns=gene_list, index=pseudotime.loc[sorted_target_indices].values
+        per_cell.to_numpy()[order], columns=gene_list, index=pseudotime[order]
     )
 
     # Apply Z-score normalization if specified

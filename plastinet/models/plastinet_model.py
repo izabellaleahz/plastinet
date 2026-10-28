@@ -1,4 +1,5 @@
 # plastinet/models/plastinet_model.py
+import copy
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -108,6 +109,7 @@ class PlastiNet:
 
         best_metric = float('inf')
         patience_counter = 0
+        best_params = copy.deepcopy(self.model.state_dict())
 
         dgi_loss_list = []
         l1_loss_list = []
@@ -164,7 +166,8 @@ class PlastiNet:
             if train_loss < best_metric:
                 best_metric = train_loss
                 patience_counter = 0
-                best_params = self.model.state_dict()
+                # state_dict() returns live references, so snapshot it
+                best_params = copy.deepcopy(self.model.state_dict())
                 print("Model improved and parameters saved.")
             else:
                 patience_counter += 1
@@ -251,52 +254,55 @@ class PlastiNet:
 
     def generate_embedding_adata(self, dataloader):
         self.model.eval()
-        embeddings = []
-        cell_ids = []
-        self_attn_w1_list = []
-        self_attn_w2_list = []
+        n_cells = self.adata.n_obs
+        embeddings = np.zeros((n_cells, self.z_dim), dtype=np.float32)
+        self_attn_w1 = np.zeros((n_cells, self.adata.n_vars), dtype=np.float32)
+        self_attn_w2 = np.zeros((n_cells, self.adata.n_vars), dtype=np.float32)
+        seen = np.zeros(n_cells, dtype=bool)
+
+        # Neighbor attention as an edge list: attention that cell `target` pays to neighbor `source`,
+        # both given as row positions in adata / embedding_adata
+        edge_targets = []
+        edge_sources = []
         neighbor_attn_w1_list = []
         neighbor_attn_w2_list = []
-        neighbor_indices_list = []
-        reduction_layer_list = []
+        reduction_layer = None
     
         for batch in dataloader:
             batch = batch.to(self.device)
             with torch.no_grad():
                 
                 pos_z = self.model.encoder(batch.x, batch.edge_index, batch.pos)
-                embeddings.append(pos_z.cpu().numpy())
-                cell_ids.extend(batch.cell_id)
+                obs_pos = batch.obs_pos.cpu().numpy()
     
-                (self_attn_w1, self_attn_w2, 
+                (batch_self_attn_w1, batch_self_attn_w2, 
                  neighbor_attn_w1, neighbor_attn_w2, 
                  neighbor_indices, reduction_layer) = self.model.encoder.get_attention_info()
-            
-                self_attn_w1_list.append(self_attn_w1.cpu().numpy())
-                self_attn_w2_list.append(self_attn_w2.cpu().numpy())
-                neighbor_attn_w1_list.append(neighbor_attn_w1.cpu().numpy())
-                neighbor_attn_w2_list.append(neighbor_attn_w2.cpu().numpy())
 
-                # neighbor_indices_list.extend(neighbor_indices)
-                # neighbor_indices_list.extend([indices.cpu().numpy() for indices in neighbor_indices])
-                neighbor_indices_list.extend([np.array(indices) for indices in neighbor_indices])
+                embeddings[obs_pos] = pos_z.cpu().numpy()
+                self_attn_w1[obs_pos] = batch_self_attn_w1.cpu().numpy()
+                self_attn_w2[obs_pos] = batch_self_attn_w2.cpu().numpy()
+                seen[obs_pos] = True
 
+                degree = np.array([len(indices) for indices in neighbor_indices], dtype=np.int64)
+                local_targets = np.repeat(np.arange(len(neighbor_indices)), degree)
+                local_sources = np.concatenate([np.asarray(indices, dtype=np.int64) for indices in neighbor_indices]) if degree.sum() > 0 else np.zeros(0, dtype=np.int64)
+                slots = np.arange(degree.sum()) - np.repeat(np.cumsum(degree) - degree, degree)
 
-                reduction_layer_list.append(reduction_layer.cpu())
-                
-        embeddings = np.concatenate(embeddings, axis=0)
-        self_attn_w1 = np.concatenate(self_attn_w1_list, axis=0)
-        self_attn_w2 = np.concatenate(self_attn_w2_list, axis=0)
+                edge_targets.append(obs_pos[local_targets])
+                edge_sources.append(obs_pos[local_sources])
+                neighbor_attn_w1_list.append(neighbor_attn_w1.cpu().numpy()[local_targets, slots])
+                neighbor_attn_w2_list.append(neighbor_attn_w2.cpu().numpy()[local_targets, slots])
+
+        if not seen.all():
+            raise ValueError(f"{(~seen).sum()} cells were not embedded; check that every cell has a value in '{self.sample_key}'.")
     
         neighbor_attention = {
-            'layer1': neighbor_attn_w1_list,
-            'layer2': neighbor_attn_w2_list,
-            'indices': [str(indices.tolist()) for indices in neighbor_indices_list]  # Convert to string
+            'target': np.concatenate(edge_targets),
+            'source': np.concatenate(edge_sources),
+            'layer1': np.concatenate(neighbor_attn_w1_list, axis=0),
+            'layer2': np.concatenate(neighbor_attn_w2_list, axis=0),
         }
-        # neighbor_attention['indices'] = [indices.tolist() for indices in neighbor_indices_list]
-    
-      
-        reduction_layer = reduction_layer_list[0]
 
         weights = reduction_layer.weight.detach().cpu().numpy()
         biases = reduction_layer.bias.detach().cpu().numpy()

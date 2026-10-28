@@ -19,7 +19,9 @@ def gmm_discretize_pseudotime(adata, pseudotime_key, n_components=3, output_labe
     gmm = GaussianMixture(n_components=n_components, random_state=42)
     gmm.fit(pseudotime_reshaped)
 
-    labels = gmm.predict(pseudotime_reshaped)
+    # GMM component order is arbitrary; renumber so label 1 has the lowest mean pseudotime
+    rank = np.argsort(np.argsort(gmm.means_.ravel()))
+    labels = rank[gmm.predict(pseudotime_reshaped)]
     full_labels = np.full(pseudotime.shape, np.nan)
     full_labels[valid_indices] = labels
     adata.obs[output_label_key] = [int(x) + 1 if not np.isnan(x) else np.nan for x in full_labels]
