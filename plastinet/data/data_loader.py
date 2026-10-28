@@ -1,4 +1,6 @@
 # plastinet/data/data_loader.py
+import numpy as np
+import pandas as pd
 import torch
 from torch_geometric.data import Data
 
@@ -8,9 +10,10 @@ def create_data_objects(adata, sample_key, radius):
     data_list = []
     spatial_coords = adata.obsm['spatial']
 
-    for s in set(adata.obs[sample_key]):
+    for s in pd.unique(adata.obs[sample_key]):
         print(s)
-        sample = adata[adata.obs[sample_key] == s]
+        sample_mask = (adata.obs[sample_key] == s).to_numpy()
+        sample = adata[sample_mask]
         
         spatial_coords = sample.obsm['spatial']
         spatial_graph = graph_alpha(spatial_coords, radius)
@@ -23,6 +26,8 @@ def create_data_objects(adata, sample_key, radius):
         
         data = Data(x=x, edge_index=edge_index, pos=pos)
         data.cell_id = cell_ids 
+        # Row position of each cell in the original adata, used to put embeddings back in adata order
+        data.obs_pos = torch.from_numpy(np.flatnonzero(sample_mask))
         
         data_list.append(data)
     return data_list
