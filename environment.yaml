@@ -1,23 +1,20 @@
 name: plastiNet
 channels:
   - conda-forge
-  - bioconda
 dependencies:
   - python=3.10
   - numpy
   - pandas
+  - scipy
   - scikit-learn
   - matplotlib
-  - scanpy
-  - squidpy
-  - gudhi
-  - cmcrameri
-  - torchvision
+  - seaborn
+  - networkx
   - anndata
+  - scanpy
+  - pytorch
   - pygam
   - pip
   - ipykernel
   - pip:
-      - torch-geometric
-
-prefix: /home/jupyter/mambaforge/envs/plastiNet
+      - torch-geometric>=2.0
