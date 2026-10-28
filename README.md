@@ -97,9 +97,15 @@ PyTorch and PyTorch Geometric are installed from PyPI by default. For a specific
 
 1. Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Anaconda](https://www.anaconda.com/download).
 2. Create the environment: `conda env create --file=environment.yaml`
-3. `conda activate plastiNet`
-4. Install PlastiNet into it: `pip install -e .`
-5. [Optional] To use it in Jupyter, register the kernel: `python -m ipykernel install --user --name=plastiNet`
+3. Keep the environment isolated from packages installed with `pip install --user`:
+   `conda env config vars set -n plastiNet PYTHONNOUSERSITE=1`
+4. `conda activate plastiNet`
+5. Install PlastiNet into it: `pip install -e .`
+6. [Optional] To use it in Jupyter, register the kernel: `python -m ipykernel install --user --name=plastiNet --env PYTHONNOUSERSITE 1`
+
+**Troubleshooting: packages in `~/.local`**
+
+The environment uses Python 3.10. If your system Python is also 3.10, both read packages from `~/.local/lib/python3.10/site-packages`. Without step 3, the environment can import those packages instead of its own. Worse, `pip` inside it can uninstall them, which breaks your system Python. If that happened before you set the variable, reinstall what was removed with your system Python, e.g. `python3 -m pip install --user torch_geometric==<version>`.
 
 ## Usage
 
